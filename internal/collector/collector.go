@@ -69,12 +69,22 @@ func (c *Collector) Snapshot() domain.Snapshot {
 			// richer per-process data parsed) — never gated on procs being
 			// non-empty, so a degraded-but-alive tool (e.g. Cursor with an
 			// unparseable log) still shows as running, just annotated.
+			//
+			// SessionCount/OldestSessionSec are computed over ALIVE
+			// sessions only. A dead session (Alive:false — e.g. a Codex
+			// rollout from weeks ago found via history.jsonl) is a known
+			// historical record, not a running agent: it must not inflate
+			// the session count or make "oldest session" report a session
+			// that ended long ago as if it were still open.
 			running := len(procs) > 0
 			var oldest float64
+			aliveCount := 0
 			for _, se := range sess {
-				if se.Alive {
-					running = true
+				if !se.Alive {
+					continue
 				}
+				running = true
+				aliveCount++
 				if !se.UpdatedAt.IsZero() {
 					if age := time.Since(se.UpdatedAt).Seconds(); age > oldest {
 						oldest = age
@@ -92,7 +102,7 @@ func (c *Collector) Snapshot() domain.Snapshot {
 					Tool:             s.Name(),
 					Installed:        true,
 					Running:          running,
-					SessionCount:     len(sess),
+					SessionCount:     aliveCount,
 					OldestSessionSec: oldest,
 					Note:             note,
 				},

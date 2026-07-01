@@ -129,6 +129,14 @@ func BuildCards(snap domain.Snapshot, toolFilter string) []Card {
 		if toolFilter != "" && s.Tool != toolFilter {
 			continue
 		}
+		if !s.Alive {
+			// A known-but-dead session (e.g. a Codex rollout from weeks
+			// ago, surfaced by Sessions() for historical visibility) is
+			// not a running agent — it doesn't get a card. See
+			// isBetterRepresentative/leftover attribution below, which
+			// already prefer alive sessions for the same reason.
+			continue
+		}
 		c := Card{
 			Tool: s.Tool, SessionID: s.ID, PID: s.PID, Status: s.Status,
 			Alive: s.Alive, CWD: s.CWD, Branch: s.Branch, Dirty: s.Dirty, Model: s.Model,

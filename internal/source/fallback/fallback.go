@@ -63,12 +63,12 @@ func (a *Adapter) Processes(ctx context.Context) ([]domain.ProcessInfo, error) {
 		if match == "" {
 			continue
 		}
-		if cpuPct, memMB, ok := a.procs.Stat(p.Pid); ok {
+		if cpuPct, memMB, startedAt, ok := a.procs.Stat(p.Pid); ok {
 			ppid, _ := p.PpidWithContext(ctx)
 			out = append(out, domain.ProcessInfo{
 				PID: int(p.Pid), PPID: int(ppid),
 				Tool: "unknown:" + match, Label: cmdline,
-				CPUPct: cpuPct, MemMB: memMB,
+				CPUPct: cpuPct, MemMB: memMB, StartedAt: startedAt,
 			})
 		}
 	}

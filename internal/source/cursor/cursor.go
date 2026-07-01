@@ -24,6 +24,7 @@ import (
 	gproc "github.com/shirou/gopsutil/v3/process"
 
 	"github.com/grippado/aitop/internal/domain"
+	"github.com/grippado/aitop/internal/procstat"
 )
 
 // Name identifies this Source.
@@ -49,6 +50,11 @@ type sampleRow struct {
 
 type Adapter struct {
 	home string
+
+	// starts is used only for CreateTime lookups (Cursor's own log has no
+	// process-start-time field) — CPU%/mem still come from the log itself,
+	// which is more accurate than gopsutil sampling for this tool.
+	starts *procstat.Cache
 
 	mu          sync.Mutex
 	curFile     string
@@ -96,6 +102,7 @@ func New() *Adapter {
 	home, _ := os.UserHomeDir()
 	return &Adapter{
 		home:        home,
+		starts:      procstat.NewCache(),
 		lastRows:    map[int]domain.ProcessInfo{},
 		lastSess:    map[int]string{},
 		lastCWD:     map[string]string{},
@@ -192,13 +199,18 @@ func (a *Adapter) ingest(data []byte) (parsedAny bool) {
 				// own resource consumption. Don't attribute it to the tool.
 				continue
 			}
+			// CPU%/mem come from Cursor's own log (more accurate than a
+			// fresh gopsutil sample); only CreateTime is looked up
+			// separately, since the log carries no start-time field.
+			_, _, startedAt, _ := a.starts.Stat(int32(r.PID))
 			a.lastRows[r.PID] = domain.ProcessInfo{
-				PID:    r.PID,
-				PPID:   r.PPID,
-				Tool:   Name,
-				Label:  r.ProcessName,
-				CPUPct: r.CPUDuringSamplePeak,
-				MemMB:  r.SampleAvgMemMb,
+				PID:       r.PID,
+				PPID:      r.PPID,
+				Tool:      Name,
+				Label:     r.ProcessName,
+				CPUPct:    r.CPUDuringSamplePeak,
+				MemMB:     r.SampleAvgMemMb,
+				StartedAt: startedAt,
 			}
 			if s.SessionID != "" {
 				a.lastSess[r.PID] = s.SessionID

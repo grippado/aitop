@@ -177,11 +177,11 @@ func (a *Adapter) Processes(ctx context.Context) ([]domain.ProcessInfo, error) {
 	if !ok {
 		return nil, nil
 	}
-	cpuPct, memMB, statOK := a.procs.Stat(int32(pid))
+	cpuPct, memMB, startedAt, statOK := a.procs.Stat(int32(pid))
 	if !statOK {
 		return nil, nil
 	}
-	return []domain.ProcessInfo{{PID: pid, Tool: Name, Label: "codex", CPUPct: cpuPct, MemMB: memMB}}, nil
+	return []domain.ProcessInfo{{PID: pid, Tool: Name, Label: "codex", CPUPct: cpuPct, MemMB: memMB, StartedAt: startedAt}}, nil
 }
 
 func unixToTime(sec int64) time.Time {

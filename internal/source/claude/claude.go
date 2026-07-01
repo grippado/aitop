@@ -125,8 +125,8 @@ func (a *Adapter) Processes(ctx context.Context) ([]domain.ProcessInfo, error) {
 		if s.PID == 0 || !s.Alive {
 			continue
 		}
-		if cpuPct, memMB, ok := a.procs.Stat(int32(s.PID)); ok {
-			out = append(out, domain.ProcessInfo{PID: s.PID, Tool: Name, Label: "claude", CPUPct: cpuPct, MemMB: memMB})
+		if cpuPct, memMB, startedAt, ok := a.procs.Stat(int32(s.PID)); ok {
+			out = append(out, domain.ProcessInfo{PID: s.PID, Tool: Name, Label: "claude", CPUPct: cpuPct, MemMB: memMB, StartedAt: startedAt})
 			seen[s.PID] = true
 		}
 	}
@@ -144,9 +144,9 @@ func (a *Adapter) Processes(ctx context.Context) ([]domain.ProcessInfo, error) {
 		if err != nil || !matchesAny(cmdline, namePatterns) {
 			continue
 		}
-		if cpuPct, memMB, ok := a.procs.Stat(p.Pid); ok {
+		if cpuPct, memMB, startedAt, ok := a.procs.Stat(p.Pid); ok {
 			ppid, _ := p.PpidWithContext(ctx)
-			out = append(out, domain.ProcessInfo{PID: pid, PPID: int(ppid), Tool: Name, Label: "claude daemon", CPUPct: cpuPct, MemMB: memMB})
+			out = append(out, domain.ProcessInfo{PID: pid, PPID: int(ppid), Tool: Name, Label: "claude daemon", CPUPct: cpuPct, MemMB: memMB, StartedAt: startedAt})
 		}
 	}
 	return out, nil

@@ -7,6 +7,7 @@ package procstat
 
 import (
 	"sync"
+	"time"
 
 	"github.com/shirou/gopsutil/v3/process"
 )
@@ -21,10 +22,13 @@ func NewCache() *Cache {
 	return &Cache{procs: map[int32]*process.Process{}}
 }
 
-// Stat returns CPU% and resident memory in MB for pid. The first call after
-// a PID is first seen has no baseline yet and returns cpuPct=0 — callers on
-// the first live tick should treat that as "warming", not "idle".
-func (c *Cache) Stat(pid int32) (cpuPct, memMB float64, ok bool) {
+// Stat returns CPU%, resident memory in MB, and process start time for
+// pid. The first call after a PID is first seen has no CPU baseline yet
+// and returns cpuPct=0 — callers on the first live tick should treat that
+// as "warming", not "idle". startedAt is the zero time.Time if gopsutil
+// couldn't read CreateTime (e.g. permission denied) — callers must render
+// that as absent, not epoch/1970.
+func (c *Cache) Stat(pid int32) (cpuPct, memMB float64, startedAt time.Time, ok bool) {
 	c.mu.Lock()
 	p, exists := c.procs[pid]
 	if !exists {
@@ -32,7 +36,7 @@ func (c *Cache) Stat(pid int32) (cpuPct, memMB float64, ok bool) {
 		p, err = process.NewProcess(pid)
 		if err != nil {
 			c.mu.Unlock()
-			return 0, 0, false
+			return 0, 0, time.Time{}, false
 		}
 		c.procs[pid] = p
 	}
@@ -41,12 +45,15 @@ func (c *Cache) Stat(pid int32) (cpuPct, memMB float64, ok bool) {
 	cpuPct, cpuErr := p.CPUPercent()
 	memInfo, memErr := p.MemoryInfo()
 	if cpuErr != nil && memErr != nil {
-		return 0, 0, false
+		return 0, 0, time.Time{}, false
 	}
 	if memErr == nil && memInfo != nil {
 		memMB = float64(memInfo.RSS) / 1024 / 1024
 	}
-	return cpuPct, memMB, true
+	if createMs, err := p.CreateTime(); err == nil && createMs > 0 {
+		startedAt = time.UnixMilli(createMs)
+	}
+	return cpuPct, memMB, startedAt, true
 }
 
 // Forget drops cached process handles for PIDs that are no longer relevant,
