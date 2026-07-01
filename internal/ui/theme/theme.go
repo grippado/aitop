@@ -12,21 +12,35 @@ import "github.com/charmbracelet/lipgloss"
 type Theme struct {
 	Name string
 
-	Background lipgloss.Color
-	Border     lipgloss.Color
+	Background  lipgloss.Color
+	Border      lipgloss.Color
 	BorderFocus lipgloss.Color
-	Text       lipgloss.Color
-	Muted      lipgloss.Color
+	Text        lipgloss.Color
+	Muted       lipgloss.Color
 
 	Good   lipgloss.Color // low load / healthy / running
 	Warn   lipgloss.Color // medium load
 	Bad    lipgloss.Color // high load / error / stale
 	Accent lipgloss.Color // headline highlights, selection
+
+	// TokenIn/TokenOut color the session token arrows on each agent card.
+	TokenIn  lipgloss.Color // "IN ↑" arrow
+	TokenOut lipgloss.Color // "OUT ↓" arrow
+
+	// Per-tool identity colors — this is what lets a card's border say
+	// "this one's Codex" at a glance across a board of many cards. Keys
+	// are the Source.Name() strings used throughout the backend
+	// (claude-code, codex, cursor); anything else (fallback/unknown
+	// process-name matches) gets ToolUnknown.
+	ToolClaude  lipgloss.Color
+	ToolCodex   lipgloss.Color
+	ToolCursor  lipgloss.Color
+	ToolUnknown lipgloss.Color
 }
 
 // BtopClassic mirrors real btop's default palette (green/yellow/red gauge
-// gradient on black) so aitop reads as "system monitor" on first glance,
-// not as a cost dashboard borrowing btop's colors.
+// gradient on black) for gauges/thresholds, with distinct per-tool identity
+// colors for the card borders that are now aitop's primary visual language.
 var BtopClassic = Theme{
 	Name:        "btop-classic",
 	Background:  lipgloss.Color("0"),
@@ -38,6 +52,14 @@ var BtopClassic = Theme{
 	Warn:        lipgloss.Color("3"),
 	Bad:         lipgloss.Color("1"),
 	Accent:      lipgloss.Color("6"),
+
+	TokenIn:  lipgloss.Color("2"), // green
+	TokenOut: lipgloss.Color("1"), // red
+
+	ToolClaude:  lipgloss.Color("209"), // coral
+	ToolCodex:   lipgloss.Color("36"),  // teal
+	ToolCursor:  lipgloss.Color("141"), // light purple
+	ToolUnknown: lipgloss.Color("245"), // same as Muted
 }
 
 // Default returns aitop's default (and, in v1, only) theme.
@@ -53,6 +75,23 @@ func (t Theme) GaugeColor(pct float64) lipgloss.Color {
 		return t.Warn
 	default:
 		return t.Good
+	}
+}
+
+// ToolColor maps a Source.Name() (or a "unknown:<name>" fallback tag) to
+// its identity color. Prefix-matches "unknown:" so every fallback-adapter
+// process (aider, windsurf, opencode, ...) shares one neutral color until
+// each gets a dedicated adapter and its own slot here.
+func (t Theme) ToolColor(tool string) lipgloss.Color {
+	switch {
+	case tool == "claude-code":
+		return t.ToolClaude
+	case tool == "codex":
+		return t.ToolCodex
+	case tool == "cursor":
+		return t.ToolCursor
+	default:
+		return t.ToolUnknown
 	}
 }
 

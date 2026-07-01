@@ -1,22 +1,24 @@
-// Package ui holds the root Bubble Tea model that composes the 5 boxes.
+// Package ui holds the root Bubble Tea model. aitop's product is agent
+// context, not system resources: the main area is a stack (or grid) of
+// per-agent cards, and whole-machine CPU/MEM/NET is a condensed footer,
+// not the headline.
 package ui
 
 import (
+	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/grippado/aitop/internal/domain"
-	"github.com/grippado/aitop/internal/ui/panes/agents"
+	"github.com/grippado/aitop/internal/ui/panes/cards"
 	"github.com/grippado/aitop/internal/ui/panes/system"
-	"github.com/grippado/aitop/internal/ui/panes/tools"
-	"github.com/grippado/aitop/internal/ui/panes/usage"
 	"github.com/grippado/aitop/internal/ui/theme"
 )
 
-// PullFunc fetches the latest snapshot; supplied by main (the demo generator
-// in v1's first milestone, later the real collector).
+// PullFunc fetches the latest snapshot; supplied by main (the demo
+// generator or the real collector).
 type PullFunc func() domain.Snapshot
 
 // Model is aitop's root Bubble Tea model.
@@ -26,14 +28,14 @@ type Model struct {
 	refresh  time.Duration
 	snapshot domain.Snapshot
 
-	focus       int // 1-5, which box has keyboard focus
-	toolFilter  string
-	sortCol     agents.SortColumn
-	selected    int
-	paused      bool
-	usageExpand bool
-	showHelp    bool
-	quitting    bool
+	toolFilter string
+	sortCol    cards.SortColumn
+	selected   int
+	grid       bool // list (default) vs grid layout, toggled by 'v'
+	expand     bool // expand the focused card's usage detail, toggled by 'u'
+	paused     bool
+	showHelp   bool
+	quitting   bool
 
 	width, height int
 }
@@ -44,8 +46,7 @@ func New(pull PullFunc, refresh time.Duration) Model {
 		theme:   theme.Default(),
 		pull:    pull,
 		refresh: refresh,
-		focus:   4,
-		sortCol: agents.SortCPU,
+		sortCol: cards.SortContext,
 	}
 }
 
@@ -58,9 +59,7 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) pullCmd() tea.Cmd {
 	pull := m.pull
-	return func() tea.Msg {
-		return snapshotMsg(pull())
-	}
+	return func() tea.Msg { return snapshotMsg(pull()) }
 }
 
 func tickCmd(d time.Duration) tea.Cmd {
@@ -91,12 +90,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
-	case "tab":
-		m.focus = m.focus%5 + 1
-	case "shift+tab":
-		m.focus = (m.focus+3)%5 + 1
-	case "1", "2", "3", "4", "5":
-		m.focus = int(msg.String()[0] - '0')
 	case "j", "down":
 		m.selected++
 	case "k", "up":
@@ -108,10 +101,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selected = 0
 	case "o":
 		m.sortCol = (m.sortCol + 1) % 4
-	case " ":
-		m.paused = !m.paused
+	case "v":
+		m.grid = !m.grid
 	case "u":
-		m.usageExpand = !m.usageExpand
+		m.expand = !m.expand
+	case "space":
+		m.paused = !m.paused
 	case "r":
 		return m, m.pullCmd()
 	case "?":
@@ -155,48 +150,85 @@ func (m Model) View() string {
 	if w == 0 {
 		w = 100
 	}
-	halfW := w/2 - 1
 
-	row1 := lipgloss.JoinHorizontal(lipgloss.Top,
-		system.RenderCPU(m.theme, m.snapshot, halfW, 8, m.focus == 1),
-		system.RenderMemNet(m.theme, m.snapshot, halfW, 8, m.focus == 2),
-	)
-	row2 := tools.Render(m.theme, m.snapshot, w, 3+len(m.snapshot.Tools), m.focus == 3)
+	var sections []string
 
-	rows := agents.BuildRows(m.snapshot, m.toolFilter)
-	agents.Sort(rows, m.sortCol)
-	if m.selected >= len(rows) {
-		m.selected = len(rows) - 1
+	if banner := degradedBanner(m.theme, m.snapshot); banner != "" {
+		sections = append(sections, banner)
+	}
+
+	cs := cards.BuildCards(m.snapshot, m.toolFilter)
+	cards.Sort(cs, m.sortCol)
+	if m.selected >= len(cs) {
+		m.selected = len(cs) - 1
 	}
 	if m.selected < 0 {
 		m.selected = 0
 	}
-	row3 := agents.Render(m.theme, rows, m.selected, m.sortCol, w, 12, m.focus == 4)
 
-	row4 := usage.Render(m.theme, m.snapshot, m.usageExpand, w, 3, m.focus == 5)
+	if len(cs) == 0 {
+		sections = append(sections, "no agent sessions detected yet")
+	} else if m.grid {
+		sections = append(sections, cards.RenderGrid(m.theme, cs, m.selected, w, m.expand))
+	} else {
+		sections = append(sections, cards.RenderList(m.theme, cs, m.selected, w, m.expand))
+	}
 
-	footer := "q quit · tab focus · 1-5 jump · j/k move · f filter · o sort · space pause · u usage · r refresh · ? help"
+	sections = append(sections, system.RenderFooter(m.theme, m.snapshot, w))
+	sections = append(sections, m.footerLine())
+
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+func (m Model) footerLine() string {
+	layout := "list"
+	if m.grid {
+		layout = "grid"
+	}
+	line := fmt.Sprintf("q quit · j/k move · f filter · o sort(%s) · v layout(%s) · u expand · space pause · r refresh · ? help", m.sortCol, layout)
 	if m.toolFilter != "" {
-		footer = "[filter: " + m.toolFilter + "] " + footer
+		line = "[filter: " + m.toolFilter + "] " + line
 	}
 	if m.paused {
-		footer = "[PAUSED] " + footer
+		line = "[PAUSED] " + line
 	}
+	return line
+}
 
-	return lipgloss.JoinVertical(lipgloss.Left, row1, row2, row3, row4, footer)
+// degradedBanner surfaces any tool whose adapter reported a degraded-but-
+// alive state (e.g. Cursor's log format changed) — the honesty rule that
+// used to live in the process-table pane's per-tool notes.
+func degradedBanner(th theme.Theme, snap domain.Snapshot) string {
+	var notes []string
+	for _, t := range snap.Tools {
+		if t.Note != "" {
+			notes = append(notes, "⚠ "+t.Tool+": "+t.Note)
+		}
+	}
+	if len(notes) == 0 {
+		return ""
+	}
+	style := lipgloss.NewStyle().Foreground(th.Warn)
+	out := ""
+	for i, n := range notes {
+		if i > 0 {
+			out += "\n"
+		}
+		out += style.Render(n)
+	}
+	return out
 }
 
 func (m Model) helpView() string {
 	return `aitop — keybindings
 
   q / ctrl+c    quit
-  tab/shift+tab cycle pane focus
-  1-5           jump to box
   j/k, arrows   move selection
   f             filter by tool
-  o             cycle sort column
+  o             cycle sort column (context / tokens / age / tool)
+  v             toggle list/grid layout
+  u             expand/collapse the focused card's usage detail
   space         pause/resume refresh
-  u             expand/collapse usage panel
   r             force refresh
   ?             toggle this help
 

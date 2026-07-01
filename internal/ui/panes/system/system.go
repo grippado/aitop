@@ -1,81 +1,84 @@
-// Package system renders the two headline boxes (1: per-core CPU, 2: MEM/NET)
-// — real, whole-system resource numbers, exactly like real btop. This is the
-// pane that has to read as "genuine system monitor" at a glance, which is
-// the single biggest differentiator vs. every existing "aitop"-named project.
+// Package system renders the condensed resource footer — what used to be
+// the headline (per-core CPU boxes) is now a secondary, ~6-7 line strip at
+// the bottom of the screen. Agents and their contexts are the product now;
+// this is just "and here's what it's costing your machine."
 package system
 
 import (
 	"fmt"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/grippado/aitop/internal/domain"
 	"github.com/grippado/aitop/internal/ui/theme"
 	"github.com/grippado/aitop/internal/ui/widgets"
 )
 
-// RenderCPU draws box 1: one bar per core, plus an "AI-total" annotation
-// showing how much of total system capacity the tracked AI-tool processes
-// are using right now.
-func RenderCPU(th theme.Theme, snap domain.Snapshot, width, height int, focused bool) string {
-	box := th.Box("1:CPU (AI procs)", focused, width, height)
-	barWidth := width - 14
-	if barWidth < 4 {
-		barWidth = 4
+// RenderFooter draws the whole-system CPU/MEM/NET strip, with an "agents:"
+// share annotation on the CPU and MEM lines showing how much of that is
+// attributable to tracked AI-tool processes. CPU is a single aggregate
+// number here, not per-core bars — the per-core detail that used to be
+// aitop's headline is gone on purpose; this pane's job is a one-glance
+// footnote, not a system-monitor centerpiece.
+func RenderFooter(th theme.Theme, snap domain.Snapshot, width int) string {
+	barWidth := width - 40
+	if barWidth < 10 {
+		barWidth = 10
 	}
 
-	var body string
-	for i, pct := range snap.System.PerCoreCPUPct {
-		body += fmt.Sprintf("Core%-2d %s %s\n", i, widgets.Bar(pct, barWidth, th.GaugeColor), widgets.PctLabel(pct))
-	}
-
-	var aiTotal float64
+	cpuAvg := average(snap.System.PerCoreCPUPct)
+	var agentCPU float64
 	for _, p := range snap.Processes {
-		aiTotal += p.CPUPct
+		agentCPU += p.CPUPct
 	}
 	cores := len(snap.System.PerCoreCPUPct)
-	var aiShare float64
+	var agentCPUShare float64
 	if cores > 0 {
-		aiShare = aiTotal / float64(cores)
-	}
-	warmNote := ""
-	if snap.Warming {
-		warmNote = " (warming)"
-	}
-	body += fmt.Sprintf("\nAI-total: %.0f%% of %d cores%s", aiShare, cores, warmNote)
-
-	return box.Render(body)
-}
-
-// RenderMemNet draws box 2: system memory and network throughput, plus what
-// share of memory the tracked AI-tool processes account for.
-func RenderMemNet(th theme.Theme, snap domain.Snapshot, width, height int, focused bool) string {
-	box := th.Box("2:MEM/NET", focused, width, height)
-	barWidth := width - 14
-	if barWidth < 4 {
-		barWidth = 4
+		agentCPUShare = agentCPU / float64(cores)
 	}
 
 	memPct := 0.0
 	if snap.System.MemTotalMB > 0 {
 		memPct = snap.System.MemUsedMB / snap.System.MemTotalMB * 100
 	}
-
-	var aiMem float64
+	var agentMem float64
 	for _, p := range snap.Processes {
-		aiMem += p.MemMB
-	}
-	var aiMemShare float64
-	if snap.System.MemUsedMB > 0 {
-		aiMemShare = aiMem / snap.System.MemUsedMB * 100
+		agentMem += p.MemMB
 	}
 
-	body := fmt.Sprintf(
-		"RSS   %s %s\nNet↑ %s/s  ↓ %s/s\n\nAgent share: %.0f%% of system MEM",
-		widgets.Bar(memPct, barWidth, th.GaugeColor), formatMB(snap.System.MemUsedMB),
-		formatBps(snap.System.NetUpBps), formatBps(snap.System.NetDownBps),
-		aiMemShare,
-	)
+	warm := ""
+	if snap.Warming {
+		warm = "  (warming)"
+	}
 
-	return box.Render(body)
+	sep := lipgloss.NewStyle().Foreground(th.Border).Render(strings.Repeat("─", max(1, width)))
+
+	line1 := fmt.Sprintf(" SYSTEM   CPU %s %s  (agents: %.0f%% of system)%s",
+		widgets.Bar(cpuAvg, barWidth, th.GaugeColor), widgets.PctLabel(cpuAvg), agentCPUShare, warm)
+	line2 := fmt.Sprintf("          MEM %s %s  %s/%s  (agents: %s)",
+		widgets.Bar(memPct, barWidth, th.GaugeColor), widgets.PctLabel(memPct), formatMB(snap.System.MemUsedMB), formatMB(snap.System.MemTotalMB), formatMB(agentMem))
+	line3 := fmt.Sprintf("          NET ↑ %s/s  ↓ %s/s", formatBps(snap.System.NetUpBps), formatBps(snap.System.NetDownBps))
+
+	return lipgloss.JoinVertical(lipgloss.Left, sep, line1, line2, line3, sep)
+}
+
+func average(vals []float64) float64 {
+	if len(vals) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, v := range vals {
+		sum += v
+	}
+	return sum / float64(len(vals))
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func formatMB(mb float64) string {
