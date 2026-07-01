@@ -1,0 +1,13 @@
+with-expecter: false
+dir: internal/mocks
+outpkg: mocks
+packages:
+  github.com/grippado/aitop/internal/source/claude:
+    interfaces:
+      Reader:
+  github.com/grippado/aitop/internal/source/codex:
+    interfaces:
+      Reader:
+  github.com/grippado/aitop/internal/source/cursor:
+    interfaces:
+      Reader:
