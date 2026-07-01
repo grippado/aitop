@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -49,16 +50,57 @@ type sampleRow struct {
 type Adapter struct {
 	home string
 
-	mu       sync.Mutex
-	curFile  string
-	offset   int64
-	lastRows map[int]domain.ProcessInfo // last-seen sample per PID, survives across ticks
-	lastSess map[int]string             // pid -> sessionId, from the log
+	mu          sync.Mutex
+	curFile     string
+	offset      int64
+	lastRows    map[int]domain.ProcessInfo // last-seen sample per PID, survives across ticks
+	lastSess    map[int]string             // pid -> sessionId, from the log
+	lastCWD     map[string]string          // sessionId -> best workspace label seen
+	lastCWDRank map[string]int             // sessionId -> the [n-RANK] that produced lastCWD, higher wins
+}
+
+// isCursorOwnProcess restricts capture to Cursor's own executables — the
+// main app binary and its Helper variants. process-monitor's rows[] also
+// includes descendants of Cursor's integrated terminal (a user's shell,
+// and whatever they run in it: git, docker, kubectl, ssh, ...), which are
+// NOT Cursor's own resource consumption and must not be attributed to it.
+func isCursorOwnProcess(processName string) bool {
+	return strings.HasPrefix(processName, "/Applications/Cursor.app/") ||
+		strings.HasPrefix(processName, "Cursor Helper")
+}
+
+// extensionHostWorkspace extracts a workspace label from an extension-host
+// row's processName, e.g. "Cursor Helper (Plugin): extension-host  backoffice [1-5]"
+// -> ("backoffice", 5). Cursor's own naming convention, not a real
+// filesystem path — the best available cwd-ish signal since the log
+// carries no explicit cwd field. "empty" (Cursor's placeholder for a
+// window with no folder open) is treated as no signal. The trailing
+// [n-RANK] second number is used as a recency proxy: a session can have
+// several open workspaces, and the highest-ranked one wins as the card's
+// representative cwd.
+var extensionHostPattern = regexp.MustCompile(`extension-host\s+(\S+)\s+\[\d+-(\d+)\]`)
+
+func extensionHostWorkspace(processName string) (label string, rank int, ok bool) {
+	m := extensionHostPattern.FindStringSubmatch(processName)
+	if m == nil || m[1] == "empty" {
+		return "", 0, false
+	}
+	rank, err := strconv.Atoi(m[2])
+	if err != nil {
+		return "", 0, false
+	}
+	return m[1], rank, true
 }
 
 func New() *Adapter {
 	home, _ := os.UserHomeDir()
-	return &Adapter{home: home, lastRows: map[int]domain.ProcessInfo{}, lastSess: map[int]string{}}
+	return &Adapter{
+		home:        home,
+		lastRows:    map[int]domain.ProcessInfo{},
+		lastSess:    map[int]string{},
+		lastCWD:     map[string]string{},
+		lastCWDRank: map[string]int{},
+	}
 }
 
 func (a *Adapter) Name() string { return Name }
@@ -144,6 +186,12 @@ func (a *Adapter) ingest(data []byte) (parsedAny bool) {
 		}
 		parsedAny = true
 		for _, r := range s.Rows {
+			if !isCursorOwnProcess(r.ProcessName) {
+				// A descendant of Cursor's integrated terminal (a shell,
+				// or whatever the user ran in it) — real, but not Cursor's
+				// own resource consumption. Don't attribute it to the tool.
+				continue
+			}
 			a.lastRows[r.PID] = domain.ProcessInfo{
 				PID:    r.PID,
 				PPID:   r.PPID,
@@ -154,6 +202,10 @@ func (a *Adapter) ingest(data []byte) (parsedAny bool) {
 			}
 			if s.SessionID != "" {
 				a.lastSess[r.PID] = s.SessionID
+				if label, rank, ok := extensionHostWorkspace(r.ProcessName); ok && rank >= a.lastCWDRank[s.SessionID] {
+					a.lastCWD[s.SessionID] = label
+					a.lastCWDRank[s.SessionID] = rank
+				}
 			}
 		}
 	}
@@ -216,6 +268,7 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 			ID:        sid,
 			PID:       pid,
 			Alive:     alive,
+			CWD:       a.lastCWD[sid], // "" when no extension-host workspace label was ever seen
 			Status:    status,
 			UpdatedAt: time.Now(),
 		})

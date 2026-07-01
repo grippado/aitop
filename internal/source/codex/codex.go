@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -27,11 +28,12 @@ const namePattern = "codex"
 type Adapter struct {
 	home  string
 	procs *procstat.Cache
+	cwd   *cwdResolver
 }
 
 func New() *Adapter {
 	home, _ := os.UserHomeDir()
-	return &Adapter{home: home, procs: procstat.NewCache()}
+	return &Adapter{home: home, procs: procstat.NewCache(), cwd: newCWDResolver()}
 }
 
 func (a *Adapter) Name() string { return Name }
@@ -90,6 +92,15 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 			si.PID = cp.PID
 			si.CWD = cp.CWD
 			si.Model = cp.Model
+		}
+		if si.CWD == "" {
+			// chat_processes.json is opportunistic and often absent (see
+			// its doc comment) — fall back to the session's own rollout
+			// file, whose first line ("session_meta") records the real
+			// cwd Codex was launched from. Cached per session ID so this
+			// only ever scans the sessions/ tree once per session, not
+			// every tick.
+			si.CWD = a.cwd.resolve(filepath.Join(a.home, ".codex"), id)
 		}
 		if live && si.PID == livePID {
 			si.Alive = true

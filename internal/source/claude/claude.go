@@ -25,18 +25,44 @@ const Name = "claude-code"
 var namePatterns = []string{"claude --dangerously-skip-permissions", "claude daemon run", "/claude "}
 
 type Adapter struct {
-	home  string
-	procs *procstat.Cache
+	// configDir is the resolved Claude Code data directory (contains
+	// sessions/, .cost-day-*.json, etc) — see resolveConfigDir.
+	configDir string
+	procs     *procstat.Cache
 }
 
 func New() *Adapter {
 	home, _ := os.UserHomeDir()
-	return &Adapter{home: home, procs: procstat.NewCache()}
+	return &Adapter{configDir: resolveConfigDir(home), procs: procstat.NewCache()}
+}
+
+// resolveConfigDir finds Claude Code's actual runtime data directory.
+// CLAUDE_CONFIG_DIR wins if set (explicit override, no guessing). Otherwise
+// this machine's dotfiles route Claude *config* (commands/skills/settings)
+// through ~/cangaco/.ai/claude/ via symlinks, but *runtime* data
+// (sessions/, cost files) is written directly by Claude Code — so both
+// candidates are probed and whichever actually has a sessions/ dir wins,
+// defaulting to the ~/.claude convention if neither does (Detect() then
+// honestly reports false).
+func resolveConfigDir(home string) string {
+	if v := os.Getenv("CLAUDE_CONFIG_DIR"); v != "" {
+		return v
+	}
+	candidates := []string{
+		filepath.Join(home, ".claude"),
+		filepath.Join(home, "cangaco", ".ai", "claude"),
+	}
+	for _, c := range candidates {
+		if _, err := reader.Stat(filepath.Join(c, "sessions")); err == nil {
+			return c
+		}
+	}
+	return candidates[0]
 }
 
 func (a *Adapter) Name() string { return Name }
 
-func (a *Adapter) sessionsDir() string { return filepath.Join(a.home, ".claude", "sessions") }
+func (a *Adapter) sessionsDir() string { return filepath.Join(a.configDir, "sessions") }
 
 func (a *Adapter) Detect(ctx context.Context) bool {
 	_, err := reader.Stat(a.sessionsDir())

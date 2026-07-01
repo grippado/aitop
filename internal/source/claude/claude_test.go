@@ -70,18 +70,18 @@ func withFakeReader(t *testing.T, f *fakeReader) {
 }
 
 func TestSessions_ParsesSessionFiles(t *testing.T) {
-	home := "/home/test"
+	configDir := "/home/test/.claude"
 	f := &fakeReader{
 		dirs: map[string][]string{
-			home + "/.claude/sessions": {"111.json", "not-json.txt"},
+			configDir + "/sessions": {"111.json", "not-json.txt"},
 		},
 		files: map[string][]byte{
-			home + "/.claude/sessions/111.json": []byte(`{"pid":111,"sessionId":"s1","cwd":"/x","status":"busy","updatedAt":1000}`),
+			configDir + "/sessions/111.json": []byte(`{"pid":111,"sessionId":"s1","cwd":"/x","status":"busy","updatedAt":1000}`),
 		},
 	}
 	withFakeReader(t, f)
 
-	a := &Adapter{home: home}
+	a := &Adapter{configDir: configDir}
 	sessions, err := a.Sessions(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -96,9 +96,9 @@ func TestSessions_ParsesSessionFiles(t *testing.T) {
 }
 
 func TestUsage_SumsCostFileAndSkipsMissing(t *testing.T) {
-	home := "/home/test"
+	configDir := "/home/test/.claude"
 	now := time.Now()
-	dayPath := costDayPath(home, now)
+	dayPath := costDayPath(configDir, now)
 
 	f := &fakeReader{
 		files: map[string][]byte{
@@ -107,7 +107,7 @@ func TestUsage_SumsCostFileAndSkipsMissing(t *testing.T) {
 	}
 	withFakeReader(t, f)
 
-	a := &Adapter{home: home}
+	a := &Adapter{configDir: configDir}
 	u, err := a.Usage(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -119,20 +119,24 @@ func TestUsage_SumsCostFileAndSkipsMissing(t *testing.T) {
 	if u.CostMonthUSD != 0 {
 		t.Fatalf("expected 0 for missing month file (real zero, not fabricated), got %v", u.CostMonthUSD)
 	}
+	if !u.Available {
+		t.Fatalf("expected Available=true: at least the cost-day file was real data")
+	}
 }
 
 func TestUsage_DiscardsExpiredRateLimitWindow(t *testing.T) {
-	home := "/home/test"
-	past := time.Now().Add(-time.Hour).Unix()
+	setFakeCacheDir(t, "/home/test/.cache")
+	past := time.Now().Add(-time.Hour).Format(time.RFC3339Nano)
 
 	f := &fakeReader{
 		files: map[string][]byte{
-			home + "/.claude/.statusline-cache.json": []byte(`{"rl5_pct":90,"rl5_reset":` + itoa(past) + `,"rl7_pct":50,"rl7_reset":` + itoa(past) + `}`),
+			"/home/test/.cache/ccstatusline/usage.json": []byte(
+				`{"sessionUsage":90,"sessionResetAt":"` + past + `","weeklyUsage":50,"weeklyResetAt":"` + past + `"}`),
 		},
 	}
 	withFakeReader(t, f)
 
-	a := &Adapter{home: home}
+	a := &Adapter{configDir: "/home/test/.claude"}
 	u, err := a.Usage(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -140,26 +144,59 @@ func TestUsage_DiscardsExpiredRateLimitWindow(t *testing.T) {
 	if u.LimitFiveHour != nil || u.LimitWeekly != nil {
 		t.Fatalf("expected nil limits for an expired reset window, got 5h=%v 7d=%v", u.LimitFiveHour, u.LimitWeekly)
 	}
+	if u.Available {
+		t.Fatalf("expected Available=false: no cost file and only an expired rate-limit reading, nothing real")
+	}
 }
 
-func itoa(n int64) string {
-	if n == 0 {
-		return "0"
+func TestUsage_LiveCcstatuslineCacheIsUsed(t *testing.T) {
+	setFakeCacheDir(t, "/home/test/.cache")
+	future := time.Now().Add(2 * time.Hour).Format(time.RFC3339Nano)
+
+	f := &fakeReader{
+		files: map[string][]byte{
+			"/home/test/.cache/ccstatusline/usage.json": []byte(
+				`{"sessionUsage":0,"sessionResetAt":"` + future + `","weeklyUsage":22,"weeklyResetAt":"` + future + `"}`),
+		},
 	}
-	neg := n < 0
-	if neg {
-		n = -n
+	withFakeReader(t, f)
+
+	a := &Adapter{configDir: "/home/test/.claude"}
+	u, err := a.Usage(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	var buf [20]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
+	if u.LimitFiveHour == nil || *u.LimitFiveHour != 0 {
+		t.Fatalf("expected LimitFiveHour=0 (a real reading, not absent), got %v", u.LimitFiveHour)
 	}
-	if neg {
-		i--
-		buf[i] = '-'
+	if u.LimitWeekly == nil || *u.LimitWeekly != 22 {
+		t.Fatalf("expected LimitWeekly=22, got %v", u.LimitWeekly)
 	}
-	return string(buf[i:])
+	if !u.Available {
+		t.Fatalf("expected Available=true: live rate-limit reading counts as real data")
+	}
+}
+
+func TestUsage_NothingFoundIsUnavailable(t *testing.T) {
+	setFakeCacheDir(t, "/home/test/.cache")
+	withFakeReader(t, &fakeReader{})
+
+	a := &Adapter{configDir: "/home/test/.claude"}
+	u, err := a.Usage(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if u.Available {
+		t.Fatalf("expected Available=false when no cost file and no rate-limit cache exist at all")
+	}
+	if u.CostTodayUSD != 0 || u.LimitFiveHour != nil || u.LimitWeekly != nil {
+		t.Fatalf("expected all fields at zero-value/nil, got %+v", u)
+	}
+}
+
+// setFakeCacheDir points ccstatuslineCacheDir() at a fake location for the
+// duration of the test via XDG_CACHE_HOME, so no real ~/.cache is touched.
+func setFakeCacheDir(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("XDG_CACHE_HOME", dir)
 }

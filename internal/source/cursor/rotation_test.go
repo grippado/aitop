@@ -59,7 +59,7 @@ func withMockReader(t *testing.T, m *mockFSReader) {
 	t.Cleanup(func() { reader = orig })
 }
 
-const sampleLine = `{"sessionId":"s1","rows":[{"pid":1,"ppid":0,"processName":"Cursor","sampleAvgMemMb":100,"cpuDuringSamplePeakPct":5}]}` + "\n"
+const sampleLine = `{"sessionId":"s1","rows":[{"pid":1,"ppid":0,"processName":"Cursor Helper: mcp-process","sampleAvgMemMb":100,"cpuDuringSamplePeakPct":5}]}` + "\n"
 
 func TestPoll_AppendAdvancesOffset(t *testing.T) {
 	m := &mockFSReader{fileName: "1000.log", content: []byte(sampleLine)}
@@ -148,7 +148,7 @@ func TestIngest_ParsesRowsIntoLastRows(t *testing.T) {
 	if !a.ingest([]byte(sampleLine)) {
 		t.Fatal("expected ingest to report at least one parsed line")
 	}
-	if len(a.lastRows) != 1 || a.lastRows[1].Label != "Cursor" {
+	if len(a.lastRows) != 1 || a.lastRows[1].Label != "Cursor Helper: mcp-process" {
 		t.Fatalf("lastRows not populated as expected: %+v", a.lastRows)
 	}
 }
