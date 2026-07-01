@@ -1,0 +1,243 @@
+// Package cursor adapts Cursor's own built-in process-monitor telemetry
+// (~/Library/Application Support/Cursor/process-monitor/*.log) into
+// aitop's Source interface. Cursor ships real per-process CPU/mem samples
+// itself — no need to shell out to gopsutil for this one. No cost data
+// exists locally for Cursor, so Usage always reports Available:false.
+package cursor
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	gproc "github.com/shirou/gopsutil/v3/process"
+
+	"github.com/grippado/aitop/internal/domain"
+)
+
+// Name identifies this Source.
+const Name = "cursor"
+
+func monitorDir(home string) string {
+	return filepath.Join(home, "Library", "Application Support", "Cursor", "process-monitor")
+}
+
+// sample mirrors one line of a process-monitor/<epoch-ms>.log file.
+type sample struct {
+	SessionID string      `json:"sessionId"`
+	Rows      []sampleRow `json:"rows"`
+}
+
+type sampleRow struct {
+	PID                  int     `json:"pid"`
+	PPID                 int     `json:"ppid"`
+	ProcessName          string  `json:"processName"`
+	SampleAvgMemMb       float64 `json:"sampleAvgMemMb"`
+	CPUDuringSamplePeak  float64 `json:"cpuDuringSamplePeakPct"`
+}
+
+type Adapter struct {
+	home string
+
+	mu       sync.Mutex
+	curFile  string
+	offset   int64
+	lastRows map[int]domain.ProcessInfo // last-seen sample per PID, survives across ticks
+	lastSess map[int]string             // pid -> sessionId, from the log
+}
+
+func New() *Adapter {
+	home, _ := os.UserHomeDir()
+	return &Adapter{home: home, lastRows: map[int]domain.ProcessInfo{}, lastSess: map[int]string{}}
+}
+
+func (a *Adapter) Name() string { return Name }
+
+func (a *Adapter) Detect(ctx context.Context) bool {
+	_, err := reader.Stat(monitorDir(a.home))
+	return err == nil
+}
+
+// latestLogFile picks the highest <epoch-ms>.log by NUMERIC filename value
+// (the canonical ordering key per Cursor's own naming), not mtime.
+func (a *Adapter) latestLogFile() (string, error) {
+	entries, err := reader.ReadDir(monitorDir(a.home))
+	if err != nil {
+		return "", err
+	}
+	var best string
+	var bestTS int64 = -1
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".log") {
+			continue
+		}
+		tsStr := strings.TrimSuffix(e.Name(), ".log")
+		ts, err := strconv.ParseInt(tsStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		if ts > bestTS {
+			bestTS = ts
+			best = e.Name()
+		}
+	}
+	if best == "" {
+		return "", errors.New("no process-monitor log files found")
+	}
+	return filepath.Join(monitorDir(a.home), best), nil
+}
+
+// poll advances the tail-follow position, handling rotation/shrink, and
+// returns any newly-appended bytes. Called by both Processes and Sessions
+// so they always see a consistent view within one tick.
+func (a *Adapter) poll() ([]byte, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	latest, err := a.latestLogFile()
+	if err != nil {
+		return nil, err
+	}
+
+	if latest != a.curFile {
+		// The active log rotated to a new filename — start fresh on it.
+		a.curFile = latest
+		a.offset = 0
+	}
+
+	info, err := reader.Stat(a.curFile)
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() < a.offset {
+		// Same filename, but shrunk (truncated/rotated in place) — the old
+		// offset is now meaningless. Reset and re-read from the top rather
+		// than seeking into garbage.
+		a.offset = 0
+	}
+
+	data, newSize, err := reader.ReadFrom(a.curFile, a.offset)
+	if err != nil {
+		return nil, err
+	}
+	a.offset = newSize
+	return data, nil
+}
+
+func (a *Adapter) ingest(data []byte) (parsedAny bool) {
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for sc.Scan() {
+		var s sample
+		if err := json.Unmarshal(sc.Bytes(), &s); err != nil {
+			continue
+		}
+		parsedAny = true
+		for _, r := range s.Rows {
+			a.lastRows[r.PID] = domain.ProcessInfo{
+				PID:    r.PID,
+				PPID:   r.PPID,
+				Tool:   Name,
+				Label:  r.ProcessName,
+				CPUPct: r.CPUDuringSamplePeak,
+				MemMB:  r.SampleAvgMemMb,
+			}
+			if s.SessionID != "" {
+				a.lastSess[r.PID] = s.SessionID
+			}
+		}
+	}
+	return parsedAny
+}
+
+// Processes returns the last-known-good per-PID samples. If new log data
+// arrived this tick but none of it parsed, that's surfaced as an error
+// (becomes a visible "detected, log not parseable" note upstream) while
+// still returning whatever was cached from earlier ticks — never a silent
+// blank-out.
+func (a *Adapter) Processes(ctx context.Context) ([]domain.ProcessInfo, error) {
+	data, err := a.poll()
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	var polErr error
+	if err != nil {
+		polErr = fmt.Errorf("cursor detectado, log não parseável (%w)", err)
+	} else if len(data) > 0 {
+		if !a.ingest(data) {
+			polErr = errors.New("cursor detectado, log não parseável (formato inesperado)")
+		}
+	}
+
+	out := make([]domain.ProcessInfo, 0, len(a.lastRows))
+	for _, p := range a.lastRows {
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].PID < out[j].PID })
+
+	return out, polErr
+}
+
+// Sessions groups cached rows by sessionId, and marks liveness from an
+// independent ps check — never gated on the log having parsed correctly,
+// so a corrupted log still shows Cursor as running.
+func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
+	_, _ = a.poll() // best-effort refresh; errors surface via Processes
+
+	alive := processAlive(ctx)
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	seen := map[string]bool{}
+	var out []domain.SessionInfo
+	for pid, sid := range a.lastSess {
+		if seen[sid] {
+			continue
+		}
+		seen[sid] = true
+		status := "idle"
+		if alive {
+			status = "busy"
+		}
+		out = append(out, domain.SessionInfo{
+			Tool:      Name,
+			ID:        sid,
+			PID:       pid,
+			Alive:     alive,
+			Status:    status,
+			UpdatedAt: time.Now(),
+		})
+	}
+	if len(out) == 0 && alive {
+		// Process is running but we have no session-tagged rows yet (cold
+		// start, or a log we can't parse) — still surface liveness.
+		out = append(out, domain.SessionInfo{Tool: Name, Alive: true, Status: "busy", UpdatedAt: time.Now()})
+	}
+	return out, nil
+}
+
+func processAlive(ctx context.Context) bool {
+	procs, err := gproc.ProcessesWithContext(ctx)
+	if err != nil {
+		return false
+	}
+	for _, p := range procs {
+		name, _ := p.NameWithContext(ctx)
+		if strings.Contains(name, "Cursor") {
+			return true
+		}
+	}
+	return false
+}

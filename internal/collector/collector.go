@@ -60,10 +60,15 @@ func (c *Collector) Snapshot() domain.Snapshot {
 			tctx, cancel := context.WithTimeout(ctx, c.timeout)
 			defer cancel()
 
-			procs, _ := s.Processes(tctx)
+			procs, procErr := s.Processes(tctx)
 			sess, _ := s.Sessions(tctx)
 			usage, _ := s.Usage(tctx)
 
+			// Running reflects actual liveness (an adapter's Sessions can
+			// mark Alive from a plain ps check independent of whether its
+			// richer per-process data parsed) — never gated on procs being
+			// non-empty, so a degraded-but-alive tool (e.g. Cursor with an
+			// unparseable log) still shows as running, just annotated.
 			running := len(procs) > 0
 			var oldest float64
 			for _, se := range sess {
@@ -77,6 +82,11 @@ func (c *Collector) Snapshot() domain.Snapshot {
 				}
 			}
 
+			note := ""
+			if procErr != nil {
+				note = procErr.Error()
+			}
+
 			results[i] = result{
 				tool: domain.ToolStatus{
 					Tool:             s.Name(),
@@ -84,6 +94,7 @@ func (c *Collector) Snapshot() domain.Snapshot {
 					Running:          running,
 					SessionCount:     len(sess),
 					OldestSessionSec: oldest,
+					Note:             note,
 				},
 				procs: procs,
 				sess:  sess,
