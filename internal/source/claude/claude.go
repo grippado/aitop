@@ -27,13 +27,14 @@ var namePatterns = []string{"claude --dangerously-skip-permissions", "claude dae
 type Adapter struct {
 	// configDir is the resolved Claude Code data directory (contains
 	// sessions/, .cost-day-*.json, etc) — see resolveConfigDir.
-	configDir string
-	procs     *procstat.Cache
+	configDir  string
+	procs      *procstat.Cache
+	transcript *transcriptTracker
 }
 
 func New() *Adapter {
 	home, _ := os.UserHomeDir()
-	return &Adapter{configDir: resolveConfigDir(home), procs: procstat.NewCache()}
+	return &Adapter{configDir: resolveConfigDir(home), procs: procstat.NewCache(), transcript: newTranscriptTracker()}
 }
 
 // resolveConfigDir finds Claude Code's actual runtime data directory.

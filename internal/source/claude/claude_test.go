@@ -3,6 +3,7 @@ package claude
 import (
 	"io/fs"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -10,10 +11,11 @@ import (
 type fakeFileInfo struct {
 	name  string
 	isDir bool
+	size  int64
 }
 
 func (f fakeFileInfo) Name() string       { return f.name }
-func (f fakeFileInfo) Size() int64        { return 0 }
+func (f fakeFileInfo) Size() int64        { return f.size }
 func (f fakeFileInfo) Mode() fs.FileMode  { return 0 }
 func (f fakeFileInfo) ModTime() time.Time { return time.Time{} }
 func (f fakeFileInfo) IsDir() bool        { return f.isDir }
@@ -47,7 +49,8 @@ func (f *fakeReader) ReadDir(path string) ([]os.DirEntry, error) {
 	}
 	var out []os.DirEntry
 	for _, n := range names {
-		out = append(out, fakeDirEntry{fakeFileInfo{name: n}})
+		_, isDir := f.dirs[filepath.Join(path, n)]
+		out = append(out, fakeDirEntry{fakeFileInfo{name: n, isDir: isDir}})
 	}
 	return out, nil
 }
@@ -56,10 +59,22 @@ func (f *fakeReader) Stat(path string) (os.FileInfo, error) {
 	if _, ok := f.dirs[path]; ok {
 		return fakeFileInfo{name: path, isDir: true}, nil
 	}
-	if _, ok := f.files[path]; ok {
-		return fakeFileInfo{name: path}, nil
+	if b, ok := f.files[path]; ok {
+		return fakeFileInfo{name: path, size: int64(len(b))}, nil
 	}
 	return nil, os.ErrNotExist
+}
+
+func (f *fakeReader) ReadFrom(path string, offset int64) ([]byte, int64, error) {
+	b, ok := f.files[path]
+	if !ok {
+		return nil, 0, os.ErrNotExist
+	}
+	size := int64(len(b))
+	if offset > size {
+		offset = 0
+	}
+	return b[offset:], size, nil
 }
 
 func withFakeReader(t *testing.T, f *fakeReader) {
