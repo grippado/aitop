@@ -1,0 +1,39 @@
+version: 2
+
+builds:
+  - main: ./cmd/aitop/
+    binary: aitop
+    ldflags:
+      - -s -w -X github.com/grippado/aitop/internal/version.Version={{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  make_latest: true
+
+changelog:
+  disable: true
+
+brews:
+  - repository:
+      owner: grippado
+      name: homebrew-aitop
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/grippado/aitop
+    description: "btop-style real-time resource monitor for AI coding agents (Claude Code, Codex, Cursor)"
+    license: MIT
+    install: |
+      bin.install "aitop"
