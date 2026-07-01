@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -15,6 +16,8 @@ import (
 	"github.com/grippado/aitop/internal/collector"
 	"github.com/grippado/aitop/internal/demo"
 	"github.com/grippado/aitop/internal/domain"
+	"github.com/grippado/aitop/internal/source"
+	"github.com/grippado/aitop/internal/source/claude"
 	"github.com/grippado/aitop/internal/ui"
 	"github.com/grippado/aitop/internal/version"
 )
@@ -39,7 +42,9 @@ func main() {
 		gen := demo.New()
 		pull = gen.Snapshot
 	} else {
-		coll := collector.New(nil, *refresh)
+		ctx := context.Background()
+		all := []source.Source{claude.New()}
+		coll := collector.New(source.Resolve(ctx, all), *refresh)
 		pull = coll.Snapshot
 	}
 
@@ -100,6 +105,14 @@ func printText(s domain.Snapshot) {
 			fmt.Printf("  tool=%-12s available=false\n", u.Tool)
 			continue
 		}
-		fmt.Printf("  tool=%-12s today=$%.2f month=$%.2f tokens_in=%d tokens_out=%d\n", u.Tool, u.CostTodayUSD, u.CostMonthUSD, u.TokensIn, u.TokensOut)
+		limit5, limit7 := "—", "—"
+		if u.LimitFiveHour != nil {
+			limit5 = fmt.Sprintf("%.0f%%", *u.LimitFiveHour)
+		}
+		if u.LimitWeekly != nil {
+			limit7 = fmt.Sprintf("%.0f%%", *u.LimitWeekly)
+		}
+		fmt.Printf("  tool=%-12s today=$%.2f month=$%.2f tokens_in=%d tokens_out=%d ctx=%.0f%% 5h=%s 7d=%s\n",
+			u.Tool, u.CostTodayUSD, u.CostMonthUSD, u.TokensIn, u.TokensOut, u.ContextUsedPct, limit5, limit7)
 	}
 }
