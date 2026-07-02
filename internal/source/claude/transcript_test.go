@@ -1,6 +1,54 @@
 package claude
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestSummarizeLastAction(t *testing.T) {
+	toolBlock := contentBlock{Type: "tool_use", Name: "Bash"}
+	toolBlock.Input.Command = "go test ./... with a very long command that should get clamped down to size"
+	textBlock := contentBlock{Type: "text", Text: "thinking about   the   next   step\nacross lines"}
+	emptyText := contentBlock{Type: "text", Text: "   "}
+
+	if got := summarizeLastAction(nil); got != "" {
+		t.Fatalf("expected empty for no blocks, got %q", got)
+	}
+	if got := summarizeLastAction([]contentBlock{emptyText}); got != "" {
+		t.Fatalf("expected empty for blank text, got %q", got)
+	}
+	if got := summarizeLastAction([]contentBlock{textBlock}); got != "💭 thinking about the next step across lines" {
+		t.Fatalf("unexpected text summary: %q", got)
+	}
+	if got := summarizeLastAction([]contentBlock{textBlock, toolBlock}); !strings.HasPrefix(got, "🔧") {
+		t.Fatalf("expected the LAST block (tool_use) to win over an earlier text block, got %q", got)
+	}
+}
+
+func TestIngest_CapturesAiTitleAndLastAction(t *testing.T) {
+	tr := newTranscriptTracker()
+	data := []byte(
+		`{"type":"ai-title","aiTitle":"Resolver conflitos do wsync"}` + "\n" +
+			transcriptLineFor("claude-sonnet-5", 5, 10, 20, 30) + // no content -> no action
+			`{"message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/x/y.go"}}]}}` + "\n" + // action, no usage
+			`{"type":"ai-title","aiTitle":"aitop-tui-monitoring"}` + "\n", // title updates again
+	)
+	tr.ingest("sX", data)
+
+	usage, ok := tr.get("sX")
+	if !ok {
+		t.Fatal("expected a reading")
+	}
+	if usage.Title != "aitop-tui-monitoring" {
+		t.Fatalf("expected the LATEST ai-title to win, got %q", usage.Title)
+	}
+	if usage.LastAction != "🔧 Read: /x/y.go" {
+		t.Fatalf("unexpected last action: %q", usage.LastAction)
+	}
+	if usage.InputTokens != 5 {
+		t.Fatalf("expected usage fields from the one line that had them, got %+v", usage)
+	}
+}
 
 func transcriptLineFor(model string, in, cacheCreate, cacheRead, out int64) string {
 	return `{"message":{"model":"` + model + `","usage":{"input_tokens":` + itoa64(in) +

@@ -96,7 +96,7 @@ func TestSessions_ParsesSessionFiles(t *testing.T) {
 	}
 	withFakeReader(t, f)
 
-	a := &Adapter{configDir: configDir}
+	a := &Adapter{configDir: configDir, transcript: newTranscriptTracker()}
 	sessions, err := a.Sessions(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -122,7 +122,7 @@ func TestUsage_SumsCostFileAndSkipsMissing(t *testing.T) {
 	}
 	withFakeReader(t, f)
 
-	a := &Adapter{configDir: configDir}
+	a := &Adapter{configDir: configDir, transcript: newTranscriptTracker()}
 	u, err := a.Usage(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -151,7 +151,7 @@ func TestUsage_DiscardsExpiredRateLimitWindow(t *testing.T) {
 	}
 	withFakeReader(t, f)
 
-	a := &Adapter{configDir: "/home/test/.claude"}
+	a := &Adapter{configDir: "/home/test/.claude", transcript: newTranscriptTracker()}
 	u, err := a.Usage(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -176,7 +176,7 @@ func TestUsage_LiveCcstatuslineCacheIsUsed(t *testing.T) {
 	}
 	withFakeReader(t, f)
 
-	a := &Adapter{configDir: "/home/test/.claude"}
+	a := &Adapter{configDir: "/home/test/.claude", transcript: newTranscriptTracker()}
 	u, err := a.Usage(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -196,7 +196,7 @@ func TestUsage_NothingFoundIsUnavailable(t *testing.T) {
 	setFakeCacheDir(t, "/home/test/.cache")
 	withFakeReader(t, &fakeReader{})
 
-	a := &Adapter{configDir: "/home/test/.claude"}
+	a := &Adapter{configDir: "/home/test/.claude", transcript: newTranscriptTracker()}
 	u, err := a.Usage(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

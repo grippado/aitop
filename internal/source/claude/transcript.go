@@ -21,6 +21,16 @@ type transcriptUsage struct {
 	CacheCreationInputTokens int64
 	CacheReadInputTokens     int64
 	OutputTokens             int64
+	// LastAction is a short summary of the most recent tool call or
+	// thinking snippet, e.g. "🔧 Bash: go test ./..." — the same content
+	// mutirao's stream-fmt.jq extracts from message.content[], just
+	// condensed to one line instead of a live multi-line stream.
+	LastAction string
+	// Title is Claude Code's own auto-generated session title (a
+	// top-level {"type":"ai-title","aiTitle":"..."} line it writes to the
+	// transcript itself, re-titling as the conversation's topic shifts) —
+	// the direct analog of mutirao's per-mão task title.
+	Title string
 }
 
 // contextTokens is "how many tokens make up the model's context this
@@ -43,16 +53,89 @@ func contextWindowForModel(model string) int64 {
 	return 200000
 }
 
+// contentBlock mirrors one entry of message.content[] — confirmed shape
+// on this machine's real transcripts: {"type":"tool_use","name":"Bash",
+// "input":{"command":"..."}} or {"type":"text","text":"..."}. Same
+// fields mutirao's stream-fmt.jq reads (input.file_path // .command //
+// .pattern // .description // .path).
+type contentBlock struct {
+	Type  string `json:"type"`
+	Text  string `json:"text"`
+	Name  string `json:"name"`
+	Input struct {
+		FilePath    string `json:"file_path"`
+		Command     string `json:"command"`
+		Pattern     string `json:"pattern"`
+		Description string `json:"description"`
+		Path        string `json:"path"`
+	} `json:"input"`
+}
+
 type transcriptLine struct {
+	Type    string `json:"type"`    // top-level: "assistant", "user", "ai-title", "bridge-session", ...
+	AiTitle string `json:"aiTitle"` // populated only when Type == "ai-title"
 	Message struct {
-		Model string `json:"model"`
-		Usage struct {
+		Model   string         `json:"model"`
+		Content []contentBlock `json:"content"`
+		Usage   struct {
 			InputTokens              int64 `json:"input_tokens"`
 			CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
 			CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
 			OutputTokens             int64 `json:"output_tokens"`
 		} `json:"usage"`
 	} `json:"message"`
+}
+
+// summarizeLastAction condenses the LAST content block of a turn into one
+// display line — mirrors mutirao's tool_use/text handling, minus the
+// live multi-line stream (aitop polls a snapshot, it doesn't tail a
+// pane). Returns "" for block types with nothing worth summarizing
+// (e.g. empty text, or a type this adapter doesn't recognize).
+func summarizeLastAction(blocks []contentBlock) string {
+	if len(blocks) == 0 {
+		return ""
+	}
+	b := blocks[len(blocks)-1]
+	switch b.Type {
+	case "tool_use":
+		name := b.Name
+		if name == "" {
+			name = "tool"
+		}
+		detail := firstNonEmpty(b.Input.FilePath, b.Input.Command, b.Input.Pattern, b.Input.Description, b.Input.Path)
+		if detail == "" {
+			return "🔧 " + name
+		}
+		return "🔧 " + name + ": " + clampText(detail, 50)
+	case "text":
+		txt := strings.TrimSpace(b.Text)
+		if txt == "" {
+			return ""
+		}
+		return "💭 " + clampText(txt, 60)
+	default:
+		return ""
+	}
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// clampText collapses whitespace/newlines (mirrors mutirao's
+// gsub("\\s+";" ")) and truncates to n runes with an ellipsis.
+func clampText(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	r := []rune(s)
+	if len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
 }
 
 // transcriptTracker tail-follows each session's transcript file for its
@@ -122,27 +205,38 @@ func (t *transcriptTracker) get(sessionID string) (transcriptUsage, bool) {
 }
 
 func (t *transcriptTracker) ingest(sessionID string, data []byte) {
+	t.mu.Lock()
+	found := t.latest[sessionID] // preserve whatever was already known
+	t.mu.Unlock()
+	have := false
+
 	sc := bufio.NewScanner(bytes.NewReader(data))
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	var found transcriptUsage
-	have := false
 	for sc.Scan() {
 		var l transcriptLine
 		if err := json.Unmarshal(sc.Bytes(), &l); err != nil {
 			continue
 		}
-		if l.Message.Usage.InputTokens == 0 && l.Message.Usage.OutputTokens == 0 &&
-			l.Message.Usage.CacheReadInputTokens == 0 && l.Message.Usage.CacheCreationInputTokens == 0 {
-			continue // not a turn with usage data (e.g. a bridge-session/meta line)
+
+		if l.Type == "ai-title" && l.AiTitle != "" {
+			found.Title = l.AiTitle
+			have = true
 		}
-		found = transcriptUsage{
-			Model:                    l.Message.Model,
-			InputTokens:              l.Message.Usage.InputTokens,
-			CacheCreationInputTokens: l.Message.Usage.CacheCreationInputTokens,
-			CacheReadInputTokens:     l.Message.Usage.CacheReadInputTokens,
-			OutputTokens:             l.Message.Usage.OutputTokens,
+
+		u := l.Message.Usage
+		if u.InputTokens != 0 || u.OutputTokens != 0 || u.CacheReadInputTokens != 0 || u.CacheCreationInputTokens != 0 {
+			found.Model = l.Message.Model
+			found.InputTokens = u.InputTokens
+			found.CacheCreationInputTokens = u.CacheCreationInputTokens
+			found.CacheReadInputTokens = u.CacheReadInputTokens
+			found.OutputTokens = u.OutputTokens
+			have = true
 		}
-		have = true
+
+		if action := summarizeLastAction(l.Message.Content); action != "" {
+			found.LastAction = action
+			have = true
+		}
 	}
 	if !have {
 		return

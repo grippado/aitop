@@ -92,7 +92,14 @@ func RenderCard(th theme.Theme, c Card, width int, selected bool, expanded bool)
 
 	pillLine := renderPills(c, textWidth)
 
-	content := lipgloss.JoinVertical(lipgloss.Left, append(mid, "", pillLine)...)
+	var lines []string
+	if title := renderTitle(th, c, textWidth); title != "" {
+		lines = append(lines, title)
+	}
+	lines = append(lines, mid...)
+	lines = append(lines, "", pillLine)
+
+	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
 	if expanded {
 		content = lipgloss.JoinVertical(lipgloss.Left, content, renderExpanded(th, c))
 	}
@@ -150,10 +157,14 @@ func renderBody(th theme.Theme, c Card, width int) []string {
 		dominant = fmt.Sprintf("%s  ctx %s", badgeStyled, widgets.Dash)
 	}
 
-	// Secondary: last session action. No adapter surfaces this yet (it'd
-	// need per-turn transcript parsing), so it's honestly always "—" for
-	// now rather than a fabricated activity string.
+	// Secondary: last session action, read from the session's own
+	// transcript when the adapter supports it (Claude Code today). "—"
+	// when the adapter has no such source (Codex, Cursor) — never
+	// fabricated.
 	secondary := widgets.Dash
+	if c.LastAction != "" {
+		secondary = c.LastAction
+	}
 
 	// Tertiary: whatever the ~{PWD} footer pill doesn't already cover —
 	// branch/dirty state. Also unpopulated by any adapter today.
@@ -181,6 +192,19 @@ func stateBadge(c Card) (string, lipgloss.Color) {
 		// not fabricated here.
 		return "◌ unknown", lipgloss.Color("245")
 	}
+}
+
+// renderTitle draws the card's header line — a short descriptive label
+// for what the session is working on (e.g. Claude Code's own
+// auto-generated session title), the analog of mutirao's per-mão task
+// title. Returns "" when the adapter has no such source (Codex, Cursor
+// today), in which case RenderCard omits the line entirely rather than
+// leaving a blank header.
+func renderTitle(th theme.Theme, c Card, width int) string {
+	if c.Title == "" {
+		return ""
+	}
+	return lipgloss.NewStyle().Bold(true).Foreground(th.Accent).Render(truncateRight(c.Title, width))
 }
 
 // renderPills builds the card's footer line — left pill for tool identity,

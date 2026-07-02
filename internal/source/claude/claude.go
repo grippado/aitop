@@ -99,7 +99,7 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 		if err := json.Unmarshal(raw, &sf); err != nil {
 			continue
 		}
-		out = append(out, domain.SessionInfo{
+		si := domain.SessionInfo{
 			Tool:      Name,
 			ID:        sf.SessionID,
 			PID:       sf.PID,
@@ -107,7 +107,12 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 			CWD:       sf.CWD,
 			Status:    normalizeStatus(sf.Status),
 			UpdatedAt: msToTime(sf.UpdatedAt),
-		})
+		}
+		if usage, ok := a.transcript.usageFor(a.configDir, sf.CWD, sf.SessionID); ok {
+			si.LastAction = usage.LastAction
+			si.Title = usage.Title
+		}
+		out = append(out, si)
 	}
 	return out, nil
 }

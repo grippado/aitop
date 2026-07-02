@@ -47,16 +47,18 @@ func (c SortColumn) String() string {
 
 // Card is one agent/session, denormalized for rendering.
 type Card struct {
-	Tool      string
-	SessionID string
-	PID       int
-	Status    string // "busy" | "idle" | "unknown" (raw session status)
-	Alive     bool
-	CWD       string
-	Branch    string
-	Dirty     bool
-	Model     string
-	AgeSec    float64 // seconds since last activity
+	Tool       string
+	SessionID  string
+	PID        int
+	Status     string // "busy" | "idle" | "unknown" (raw session status)
+	Alive      bool
+	CWD        string
+	Branch     string
+	Dirty      bool
+	Model      string
+	Title      string // e.g. Claude Code's own auto-generated session title
+	LastAction string // e.g. "🔧 Bash: go test ./..." — "" when unavailable
+	AgeSec     float64 // seconds since last activity
 
 	HasContext bool
 	ContextPct float64
@@ -140,6 +142,7 @@ func BuildCards(snap domain.Snapshot, toolFilter string) []Card {
 		c := Card{
 			Tool: s.Tool, SessionID: s.ID, PID: s.PID, Status: s.Status,
 			Alive: s.Alive, CWD: s.CWD, Branch: s.Branch, Dirty: s.Dirty, Model: s.Model,
+			Title: s.Title, LastAction: s.LastAction,
 		}
 		if !s.UpdatedAt.IsZero() {
 			c.AgeSec = now.Sub(s.UpdatedAt).Seconds()

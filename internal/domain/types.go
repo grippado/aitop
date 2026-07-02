@@ -31,6 +31,15 @@ type SessionInfo struct {
 	Model     string    `json:"model,omitempty"`
 	Status    string    `json:"status"` // "busy" | "idle" | "unknown"
 	UpdatedAt time.Time `json:"updated_at"`
+	// LastAction is a short, human-readable summary of the most recent
+	// tool call or thinking snippet found in the session's own transcript
+	// (e.g. "🔧 Bash: go test ./..."), when the adapter can read one.
+	// Empty when unavailable — never fabricated.
+	LastAction string `json:"last_action,omitempty"`
+	// Title is a short, descriptive label for what this session is
+	// working on — e.g. Claude Code's own auto-generated "ai-title" for
+	// the conversation. Empty when the adapter has no such source.
+	Title string `json:"title,omitempty"`
 }
 
 // UsageInfo describes cost/token/rate-limit usage for a tool. Available=false
