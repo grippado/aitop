@@ -6,9 +6,10 @@
 
 ## What it does
 
-- **A card per agent session.** Tool identity (border color), state (running/idle), context-window fill, and session token burn, at a glance — across every Claude Code, Codex, and Cursor session running on your machine right now.
+- **A card per agent session.** Tool identity (border color), a title synthesized from the session's own first request (or Claude Code's own auto-generated title, when there is one), the state badge, the last action taken (tool call or message, word-wrapped), and a `Context: [bar] 234k/1000k (23%)` line — a real reading, never a percentage guessed from nothing — across every Claude Code, Codex, and Cursor session running on your machine right now.
+- **Per-session, not per-tool.** Two Claude Code sessions running side by side get their own token counts and context bars — they never mix, and a card for a dead session never lingers as if it were still running.
 - **Multi-tool from day one.** Claude Code, Codex CLI, and Cursor — Cursor in particular isn't covered by any other "aitop"-named project as of this writing.
-- **Resources, condensed.** A 4-line footer shows real aggregate CPU/MEM/NET (via [gopsutil](https://github.com/shirou/gopsutil)) plus how much of that your AI-tool processes account for — present, but deliberately secondary.
+- **Resources, condensed.** A short footer shows real aggregate CPU/MEM/NET (via [gopsutil](https://github.com/shirou/gopsutil)); the MEM bar is segmented to show how much of that is attributable to your AI-tool processes specifically — present, but deliberately secondary to the cards above it.
 - **Read-only.** No approve/reply/merge actions (that's [agent-dashboard](https://github.com/bjornjee/agent-dashboard)'s job, and it requires tmux — aitop doesn't). aitop only ever observes.
 - **Honest about gaps.** Missing data renders as `—`, never a fabricated `0`. Cursor has no local cost data and aitop says so instead of guessing; the same goes for any field a given adapter hasn't populated yet.
 
@@ -56,16 +57,16 @@ Every existing "aitop"-named project (and the excellent but tmux-bound `agent-da
 
 ## What's supported today (v1)
 
-| Tool | Process/CPU/MEM | Sessions | Context% / tokens | Cost |
-|------|---|---|---|---|
-| Claude Code | ✅ | ✅ | Not available locally yet (no passive on-disk source — see adapter source) | ✅ |
-| Codex CLI | ✅ | ✅ | Not available locally (see adapter source for why) | Not available (bills via your own API key) |
-| Cursor | ✅ (Cursor's own telemetry) | ✅ | Not available | Not available (proprietary/cloud-side) |
-| Other AI CLIs (aider, windsurf, opencode, ...) | Best-effort via process-name match | — | — | — |
+| Tool | Process/CPU/MEM | Sessions | Title / last action | Context% / tokens | Rate limits |
+|------|---|---|---|---|---|
+| Claude Code | ✅ | ✅ | ✅ (own auto-title + transcript) | ✅ (per-session, own transcript) | ✅ (5h/7d, via `ccstatusline`'s cache) |
+| Codex CLI | ✅ | ✅ | ✅ (synthesized from first request + transcript) | ✅ (per-session; Codex's own rollout gives the true model context window, no guessing) | Not available (no local rate-limit source) |
+| Cursor | ✅ (Cursor's own telemetry) | ✅ | Not available | Not available | Not available (proprietary/cloud-side) |
+| Other AI CLIs (aider, windsurf, opencode, ...) | Best-effort via process-name match | — | — | — | — |
 
-Card fields that depend on backend data no adapter populates yet (last session action, git branch/dirty state, per-session — as opposed to per-tool — token/context tracking) render as `—` on real data today; `--demo` shows what the card looks like once those land.
+Cost-in-dollars was dropped from the expanded card view: on this machine's real data the cost-day/cost-month files aitop originally read haven't been written in weeks, so it never showed anything but a fake `$0.00`. Fields still unpopulated by any adapter (git branch/dirty state) render as `—` on real data today; `--demo` shows what the card looks like once those land.
 
-v2 roadmap: dedicated adapters for aider/windsurf/opencode, an external plugin mechanism, per-session (not just per-tool) usage tracking, branch/dirty detection, a local trend history, and community-contributed themes (see [CONTRIBUTING.md](./CONTRIBUTING.md)).
+v2 roadmap: dedicated adapters for aider/windsurf/opencode, an external plugin mechanism, branch/dirty detection, a local trend history, and community-contributed themes (see [CONTRIBUTING.md](./CONTRIBUTING.md)).
 
 ## License
 
