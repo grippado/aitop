@@ -32,7 +32,6 @@ type Model struct {
 	sortCol    cards.SortColumn
 	selected   int
 	grid       bool // list (default) vs grid layout, toggled by 'v'
-	expand     bool // expand the focused card's usage detail, toggled by 'u'
 	paused     bool
 	showHelp   bool
 	quitting   bool
@@ -103,8 +102,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.sortCol = (m.sortCol + 1) % 4
 	case "v":
 		m.grid = !m.grid
-	case "u":
-		m.expand = !m.expand
 	case "space":
 		m.paused = !m.paused
 	case "r":
@@ -169,9 +166,9 @@ func (m Model) View() string {
 	if len(cs) == 0 {
 		sections = append(sections, "no agent sessions detected yet")
 	} else if m.grid {
-		sections = append(sections, cards.RenderGrid(m.theme, cs, m.selected, w, m.expand))
+		sections = append(sections, cards.RenderGrid(m.theme, cs, m.selected, w))
 	} else {
-		sections = append(sections, cards.RenderList(m.theme, cs, m.selected, w, m.expand))
+		sections = append(sections, cards.RenderList(m.theme, cs, m.selected, w))
 	}
 
 	sections = append(sections, system.RenderFooter(m.theme, m.snapshot, w))
@@ -185,7 +182,7 @@ func (m Model) footerLine() string {
 	if m.grid {
 		layout = "grid"
 	}
-	line := fmt.Sprintf("q quit · j/k move · f filter · o sort(%s) · v layout(%s) · u expand · space pause · r refresh · ? help", m.sortCol, layout)
+	line := fmt.Sprintf("q quit · j/k move · f filter · o sort(%s) · v layout(%s) · space pause · r refresh · ? help", m.sortCol, layout)
 	if m.toolFilter != "" {
 		line = "[filter: " + m.toolFilter + "] " + line
 	}
@@ -227,7 +224,6 @@ func (m Model) helpView() string {
   f             filter by tool
   o             cycle sort column (context / tokens / age / tool)
   v             toggle list/grid layout
-  u             expand/collapse the focused card's usage detail
   space         pause/resume refresh
   r             force refresh
   ?             toggle this help

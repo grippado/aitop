@@ -22,18 +22,6 @@ import (
 // aitop's headline is gone on purpose; this pane's job is a one-glance
 // footnote, not a system-monitor centerpiece.
 func RenderFooter(th theme.Theme, snap domain.Snapshot, width int) string {
-	// Bars are deliberately short — this footer's job is a glance, not a
-	// centerpiece, and a short bar leaves real room for the trailing
-	// figures (pct, MB, agent-share) instead of pushing them past the
-	// terminal edge where they'd get clipped.
-	barWidth := width / 5
-	if barWidth < 10 {
-		barWidth = 10
-	}
-	if barWidth > 24 {
-		barWidth = 24
-	}
-
 	cpuAvg := average(snap.System.PerCoreCPUPct)
 	var agentCPU float64
 	for _, p := range snap.Processes {
@@ -63,15 +51,36 @@ func RenderFooter(th theme.Theme, snap domain.Snapshot, width int) string {
 		warm = "  (warming)"
 	}
 
+	const prefix = " SYSTEM   CPU " // MEM's prefix below is padded to the same width
+
+	// MEM's agent-attributable figure is called out in the accent color —
+	// the same color SegmentedBar uses for the highlighted sub-segment
+	// inside the fill, so the number and the bar slice it describes read
+	// as one thing.
+	aiTag := lipgloss.NewStyle().Foreground(th.Accent).Render(fmt.Sprintf("(AI %s)", formatMB(agentMem)))
+	cpuSuffix := fmt.Sprintf(" %s  (agents: %.0f%% of system)%s", widgets.PctLabel(cpuAvg), agentCPUShare, warm)
+	memSuffix := fmt.Sprintf(" %s  %s/%s  %s", widgets.PctLabel(memPct), formatMB(snap.System.MemUsedMB), formatMB(snap.System.MemTotalMB), aiTag)
+
+	// Bars fill whatever horizontal room survives after each line's fixed
+	// text is laid out — CPU and MEM share one width (bounded by whichever
+	// line has more text) so the two bars still end at the same column
+	// instead of drifting apart.
+	suffixWidth := lipgloss.Width(cpuSuffix)
+	if w := lipgloss.Width(memSuffix); w > suffixWidth {
+		suffixWidth = w
+	}
+	barWidth := width - lipgloss.Width(prefix) - suffixWidth - 2 // Bar()'s own "[" "]"
+	if barWidth < 10 {
+		barWidth = 10
+	}
+
 	sep := lipgloss.NewStyle().Foreground(th.Border).Render(strings.Repeat("─", max(1, width)))
 
 	// MEM's bar highlights the agent-attributable slice (harnesses and
 	// whatever they invoke) in the accent color, inside the same used-
 	// memory fill — not a separate bar, a sub-segment of it.
-	line1 := fmt.Sprintf(" SYSTEM   CPU %s %s  (agents: %.0f%% of system)%s",
-		widgets.Bar(cpuAvg, barWidth, th.GaugeColor), widgets.PctLabel(cpuAvg), agentCPUShare, warm)
-	line2 := fmt.Sprintf("          MEM %s %s  %s/%s  (agents: %s)",
-		widgets.SegmentedBar(memPct, agentMemShare, barWidth, th.GaugeColor(memPct), th.Accent), widgets.PctLabel(memPct), formatMB(snap.System.MemUsedMB), formatMB(snap.System.MemTotalMB), formatMB(agentMem))
+	line1 := prefix + widgets.Bar(cpuAvg, barWidth, th.GaugeColor) + cpuSuffix
+	line2 := "          MEM " + widgets.SegmentedBar(memPct, agentMemShare, barWidth, th.GaugeColor(memPct), th.Accent) + memSuffix
 	line3 := fmt.Sprintf("          NET ↑ %s/s  ↓ %s/s", formatBps(snap.System.NetUpBps), formatBps(snap.System.NetDownBps))
 
 	// These lines already contain ANSI-styled substrings from the bars —

@@ -15,12 +15,12 @@ import (
 const gutterWidth = 11
 
 // RenderList stacks cards full-width, one per row — the guaranteed layout
-// (v1's default). selected is an index into cs; expanded applies only to
-// that selected card.
-func RenderList(th theme.Theme, cs []Card, selected int, width int, expanded bool) string {
+// (v1's default). selected is an index into cs. Every card renders its
+// usage detail expanded — there is no collapsed mode.
+func RenderList(th theme.Theme, cs []Card, selected int, width int) string {
 	var blocks []string
 	for i, c := range cs {
-		blocks = append(blocks, RenderCard(th, c, width, i == selected, i == selected && expanded))
+		blocks = append(blocks, RenderCard(th, c, width, i == selected))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, blocks...)
 }
@@ -28,19 +28,19 @@ func RenderList(th theme.Theme, cs []Card, selected int, width int, expanded boo
 // RenderGrid packs cards two-per-row, half width each — best-effort layout
 // toggled via 'v'. Falls back gracefully to a ragged last row when the
 // count is odd.
-func RenderGrid(th theme.Theme, cs []Card, selected int, width int, expanded bool) string {
+func RenderGrid(th theme.Theme, cs []Card, selected int, width int) string {
 	colWidth := width/2 - 1
 	if colWidth < 24 {
 		// Not enough room for two columns — list mode is the honest
 		// answer here rather than a mangled grid.
-		return RenderList(th, cs, selected, width, expanded)
+		return RenderList(th, cs, selected, width)
 	}
 
 	var rows []string
 	for i := 0; i < len(cs); i += 2 {
-		left := RenderCard(th, cs[i], colWidth, i == selected, i == selected && expanded)
+		left := RenderCard(th, cs[i], colWidth, i == selected)
 		if i+1 < len(cs) {
-			right := RenderCard(th, cs[i+1], colWidth, i+1 == selected, i+1 == selected && expanded)
+			right := RenderCard(th, cs[i+1], colWidth, i+1 == selected)
 			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, left, " ", right))
 		} else {
 			rows = append(rows, left)
@@ -51,6 +51,8 @@ func RenderGrid(th theme.Theme, cs []Card, selected int, width int, expanded boo
 
 // RenderCard draws one 3-zone card: a narrow token gutter, a vertical
 // divider, a dominant/secondary/tertiary body, and a footer pill row.
+// Every card always shows its usage detail (5h/7d limits + process
+// summary) below the body — there is no collapsed mode.
 //
 // lipgloss width arithmetic (verified empirically, not assumed): the final
 // rendered block's total width = Style.Width(n) + 2 (the rounded border,
@@ -59,7 +61,7 @@ func RenderGrid(th theme.Theme, cs []Card, selected int, width int, expanded boo
 // to .Width() is `width - 2` (styleWidth), and the actual text budget
 // available to content lines is `styleWidth - 2` for Padding(0, 1), i.e.
 // `width - 4` (textWidth).
-func RenderCard(th theme.Theme, c Card, width int, selected bool, expanded bool) string {
+func RenderCard(th theme.Theme, c Card, width int, selected bool) string {
 	borderColor := th.ToolColor(c.Tool)
 	if selected {
 		borderColor = th.Accent
@@ -78,13 +80,10 @@ func RenderCard(th theme.Theme, c Card, width int, selected bool, expanded bool)
 		bodyWidth = 10
 	}
 
-	// Last action gets 2 lines by default, 4 when the card is expanded
-	// ('u') — everything else (dominant + tertiary) stays 1 line each, so
-	// the card's total body height is 1 + actionLines + 1.
-	actionLines := 2
-	if expanded {
-		actionLines = 4
-	}
+	// Last action always gets 4 lines — everything else (dominant +
+	// tertiary) stays 1 line each, so the card's total body height is
+	// 1 + actionLines + 1.
+	const actionLines = 4
 	totalLines := 1 + actionLines + 1
 
 	gutter := renderGutter(th, c)
@@ -109,9 +108,7 @@ func RenderCard(th theme.Theme, c Card, width int, selected bool, expanded bool)
 	lines = append(lines, "", pillLine)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
-	if expanded {
-		content = lipgloss.JoinVertical(lipgloss.Left, content, renderExpanded(th, c))
-	}
+	content = lipgloss.JoinVertical(lipgloss.Left, content, renderExpanded(th, c))
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -264,8 +261,8 @@ func renderPills(c Card, width int) string {
 	return leftPill + strings.Repeat(" ", gap) + rightPill
 }
 
-// renderExpanded draws the card's expanded-only detail line (5h/7d limits
-// + process summary). Cost (today/month $) was dropped from here: on this
+// renderExpanded draws the card's always-visible usage detail line (5h/7d
+// limits + process summary). Cost (today/month $) was dropped from here: on this
 // adapter's actual data source, the cost-day file mechanism is dead (no
 // file has been written in weeks — see claude/usage.go), so it always
 // rendered "$0.00 · $0.00" — dead weight, not a real reading, not worth
