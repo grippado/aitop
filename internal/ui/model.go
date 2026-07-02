@@ -6,6 +6,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -148,10 +149,9 @@ func (m Model) View() string {
 		w = 100
 	}
 
-	var sections []string
-
+	var top []string
 	if banner := degradedBanner(m.theme, m.snapshot); banner != "" {
-		sections = append(sections, banner)
+		top = append(top, banner)
 	}
 
 	cs := cards.BuildCards(m.snapshot, m.toolFilter)
@@ -163,18 +163,98 @@ func (m Model) View() string {
 		m.selected = 0
 	}
 
+	var cardsBlock string
 	if len(cs) == 0 {
-		sections = append(sections, "no agent sessions detected yet")
+		cardsBlock = "no agent sessions detected yet"
 	} else if m.grid {
-		sections = append(sections, cards.RenderGrid(m.theme, cs, m.selected, w))
+		cardsBlock = cards.RenderGrid(m.theme, cs, m.selected, w)
 	} else {
-		sections = append(sections, cards.RenderList(m.theme, cs, m.selected, w))
+		cardsBlock = cards.RenderList(m.theme, cs, m.selected, w)
 	}
 
-	sections = append(sections, system.RenderFooter(m.theme, m.snapshot, w))
-	sections = append(sections, m.footerLine())
+	bottom := []string{system.RenderFooter(m.theme, m.snapshot, w), m.footerLine()}
+
+	// tea.WithAltScreen() draws View()'s output verbatim, with no height
+	// clamp of its own — confirmed in practice: on a terminal shorter than
+	// the full card stack, the tail of the content simply fell off the
+	// bottom of the alt-screen, unreachable no matter how the user
+	// scrolled. cardsBlock is clipped to whatever vertical room survives
+	// the fixed top/bottom sections, auto-scrolled to keep the selected
+	// card on screen — every card stays reachable via j/k regardless of
+	// terminal height, not just the ones that happen to fit.
+	overhead := blockLines(top) + blockLines(bottom)
+	var scrollNote string
+	if m.height > 0 && len(cs) > 0 {
+		cardsBlock, scrollNote = clipCardsVertically(cardsBlock, m.selected, m.grid, len(cs), m.height-overhead)
+	}
+
+	var sections []string
+	sections = append(sections, top...)
+	sections = append(sections, cardsBlock)
+	if scrollNote != "" {
+		sections = append(sections, scrollNote)
+	}
+	sections = append(sections, bottom...)
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+// clipCardsVertically slices cardsBlock down to availH lines when it
+// doesn't already fit, scrolled so the selected card's row is the topmost
+// visible line — pinned to the bottom instead once scrolling further would
+// leave blank space past the last row. No scroll state is stored on Model:
+// since the visible window is a pure function of m.selected (which Update
+// already persists via j/k), recomputing it fresh every View() call is
+// simpler than tracking a separate offset and can't drift out of sync
+// with the selection.
+func clipCardsVertically(cardsBlock string, selected int, grid bool, cardCount, availH int) (block, note string) {
+	if availH < 1 {
+		availH = 1
+	}
+	lines := strings.Split(cardsBlock, "\n")
+	if len(lines) <= availH {
+		return cardsBlock, ""
+	}
+
+	// One line reserved for the scroll indicator itself.
+	availH--
+	if availH < 1 {
+		availH = 1
+	}
+
+	row := selected
+	if grid {
+		row = selected / 2
+	}
+	scroll := row * cards.CardHeight
+	if maxScroll := len(lines) - availH; scroll > maxScroll {
+		scroll = maxScroll
+	}
+	if scroll < 0 {
+		scroll = 0
+	}
+	end := scroll + availH
+	if end > len(lines) {
+		end = len(lines)
+	}
+
+	note = fmt.Sprintf("[%d/%d sessions — j/k to scroll]", selected+1, cardCount)
+	return strings.Join(lines[scroll:end], "\n"), note
+}
+
+func linesOf(s string) int {
+	if s == "" {
+		return 0
+	}
+	return strings.Count(s, "\n") + 1
+}
+
+func blockLines(blocks []string) int {
+	n := 0
+	for _, b := range blocks {
+		n += linesOf(b)
+	}
+	return n
 }
 
 func (m Model) footerLine() string {

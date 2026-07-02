@@ -14,6 +14,16 @@ import (
 
 const gutterWidth = 11
 
+// CardHeight is the exact line count of every RenderCard's output — fixed
+// regardless of content (title 1 + rule 1 + mid 6 (actionLines) + rule 1 +
+// pills 1 + context 1 + expanded 1 = 12 content lines, + 2 for the rounded
+// border; Padding(0, 1) is horizontal-only, so it adds no vertical lines).
+// Confirmed empirically, not just derived: a dedicated test renders a real
+// card and counts newlines. The UI layer (model.go) relies on this to
+// compute which card row is on screen for vertical scrolling — it must be
+// kept in sync if RenderCard's structure changes.
+const CardHeight = 14
+
 // RenderList stacks cards full-width, one per row — the guaranteed layout
 // (v1's default). selected is an index into cs. Every card renders its
 // usage detail expanded — there is no collapsed mode.
