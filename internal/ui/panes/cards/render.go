@@ -50,8 +50,9 @@ func RenderGrid(th theme.Theme, cs []Card, selected int, width int) string {
 }
 
 // RenderCard draws one card in three vertically stacked zones, each
-// divided from the next by a full-width rule: a header (title, breathing
-// room above and below its rule), a body (a narrow token gutter, a
+// directly abutting the next full-width rule with no blank-line padding
+// (tried once with breathing room around the rules, but tighter reads
+// cleaner): a header (the title, if any), a body (a narrow token gutter, a
 // vertical divider, and the dominant state badge + last-action text), and
 // a footer (the tool/model/cwd pill, the context-window reading, and the
 // 5h/7d usage detail) — there is no collapsed mode, every card always
@@ -106,9 +107,9 @@ func RenderCard(th theme.Theme, c Card, width int, selected bool) string {
 
 	var lines []string
 	if title := renderTitle(th, c, textWidth); title != "" {
-		lines = append(lines, title, "")
+		lines = append(lines, title)
 	}
-	lines = append(lines, rule, "")
+	lines = append(lines, rule)
 	lines = append(lines, mid...)
 	lines = append(lines, rule)
 	lines = append(lines, renderPills(c, textWidth))
