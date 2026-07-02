@@ -232,6 +232,34 @@ func (a *Adapter) ingest(data []byte) (parsedAny bool) {
 	return parsedAny
 }
 
+// prune drops cached rows/session-tags for PIDs whose process no longer
+// exists. ingest() keeps every last-seen row indefinitely by design, to
+// survive gaps between log samples — but that means a PID from a closed
+// or restarted Cursor window (its process gone, but never explicitly
+// removed) lingers in lastRows/lastSess forever, still tagged with its
+// old sessionId. Confirmed in practice: that stale sessionId resolves via
+// enrichWithComposer to the SAME composer as the real live window (both
+// share the same workspace label), producing two identical cards for one
+// real task. Must be called with a.mu held.
+func (a *Adapter) prune() {
+	for pid := range a.lastRows {
+		if exists, err := gproc.PidExists(int32(pid)); err == nil && !exists {
+			delete(a.lastRows, pid)
+			delete(a.lastSess, pid)
+		}
+	}
+	liveSess := map[string]bool{}
+	for _, sid := range a.lastSess {
+		liveSess[sid] = true
+	}
+	for sid := range a.lastCWD {
+		if !liveSess[sid] {
+			delete(a.lastCWD, sid)
+			delete(a.lastCWDRank, sid)
+		}
+	}
+}
+
 // Processes returns the last-known-good per-PID samples. If new log data
 // arrived this tick but none of it parsed, that's surfaced as an error
 // (becomes a visible "detected, log not parseable" note upstream) while
@@ -251,6 +279,7 @@ func (a *Adapter) Processes(ctx context.Context) ([]domain.ProcessInfo, error) {
 			polErr = errors.New("cursor detectado, log não parseável (formato inesperado)")
 		}
 	}
+	a.prune()
 
 	out := make([]domain.ProcessInfo, 0, len(a.lastRows))
 	for _, p := range a.lastRows {
@@ -271,6 +300,7 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.prune()
 
 	seen := map[string]bool{}
 	var out []domain.SessionInfo
