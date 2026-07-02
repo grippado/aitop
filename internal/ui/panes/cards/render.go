@@ -53,11 +53,12 @@ func RenderGrid(th theme.Theme, cs []Card, selected int, width int) string {
 // directly abutting the next full-width rule with no blank-line padding
 // (tried once with breathing room around the rules, but tighter reads
 // cleaner): a header (always a title — the real one, or a computed
-// fallback, see renderTitle), a body (a narrow token gutter, a
-// vertical divider, and the dominant state badge + last-action text), and
-// a footer (the tool/model/cwd pill, the context-window reading, and the
-// 5h/7d usage detail) — there is no collapsed mode, every card always
-// shows all three.
+// fallback, see renderTitle), a body (a narrow gutter — tokens, then the
+// state badge below them, as its own small chip rather than sharing a
+// line with the action text — a vertical divider, and last-action text
+// using the entire remaining height), and a footer (the tool/model/cwd
+// pill, the context-window reading, and the 5h/7d usage detail) — there
+// is no collapsed mode, every card always shows all three.
 //
 // lipgloss width arithmetic (verified empirically, not assumed): the final
 // rendered block's total width = Style.Width(n) + 2 (the rounded border,
@@ -85,12 +86,13 @@ func RenderCard(th theme.Theme, c Card, width int, selected bool) string {
 		bodyWidth = 10
 	}
 
-	// Last action gets 5 lines now that the context reading no longer
-	// shares this block (it moved to the footer, below) — room enough to
-	// actually read a wrapped tool call or thinking snippet, not just its
-	// first couple of words. Dominant (the state badge) stays 1 line.
-	const actionLines = 5
-	totalLines := 1 + actionLines
+	// Last action gets the full 6-line body height to itself now that
+	// neither the context reading (moved to the footer) nor the state
+	// badge (moved into the gutter, below) shares this block — room
+	// enough to actually read a wrapped tool call or thinking snippet,
+	// not just its first couple of words.
+	const actionLines = 6
+	totalLines := actionLines
 
 	gutter := renderGutter(th, c)
 	body := renderBody(c, bodyWidth, actionLines)
@@ -125,49 +127,48 @@ func RenderCard(th theme.Theme, c Card, width int, selected bool) string {
 		Render(content)
 }
 
+// renderGutter draws the narrow left column: the token counts, then a
+// blank line, then the state badge as its own small chip — moved down
+// here (out of the body, where it used to share a line with the last-
+// action text) so the badge stays a glanceable, fixed-position "is this
+// thing alive" signal regardless of how much action text a card has.
 func renderGutter(th theme.Theme, c Card) []string {
 	label := lipgloss.NewStyle().Foreground(th.Muted).Render("Tokens:")
-	if !c.HasTokens {
-		return []string{label, " " + widgets.Dash, ""}
-	}
-	inStyle := lipgloss.NewStyle().Foreground(th.TokenIn)
-	outStyle := lipgloss.NewStyle().Foreground(th.TokenOut)
-	return []string{
-		label,
-		" " + inStyle.Render("IN ↑"+formatTokens(c.TokensIn)),
-		" " + outStyle.Render("OUT↓"+formatTokens(c.TokensOut)),
-	}
-}
-
-func renderBody(c Card, width int, actionLines int) []string {
 	badge, badgeColor := stateBadge(c)
 	badgeStyled := lipgloss.NewStyle().Foreground(badgeColor).Render(badge)
 
-	// Dominant: the state badge, alone. Context/tokens used to be crammed
-	// onto this line too (a bar sometimes, raw "234k ctx" text other
-	// times depending on whether the pct was reliable) — redundant with
-	// the token gutter's IN figure (the same contextTokens() sum) and
-	// inconsistent card-to-card. That richer context reading lives in the
-	// footer instead now — see renderContextOrFallback.
-	dominant := badgeStyled
+	var lines []string
+	if !c.HasTokens {
+		lines = []string{label, " " + widgets.Dash}
+	} else {
+		inStyle := lipgloss.NewStyle().Foreground(th.TokenIn)
+		outStyle := lipgloss.NewStyle().Foreground(th.TokenOut)
+		lines = []string{
+			label,
+			" " + inStyle.Render("IN ↑"+formatTokens(c.TokensIn)),
+			" " + outStyle.Render("OUT↓"+formatTokens(c.TokensOut)),
+		}
+	}
+	return append(lines, "", badgeStyled)
+}
 
-	// Secondary: last session action, read from the session's own
-	// transcript when the adapter supports it (Claude Code today) —
-	// word-wrapped across actionLines lines, never a fabricated activity
-	// string. "—" when the adapter has no such source (Codex, Cursor).
-	var secondary []string
+// renderBody draws the last session action, read from the session's own
+// transcript when the adapter supports it — word-wrapped across the
+// body's full actionLines height (no longer sharing a line with the state
+// badge, which moved into the gutter — see renderGutter), never a
+// fabricated activity string. "—" when the adapter has no such source
+// (Codex, Cursor without a live composer match).
+func renderBody(c Card, width int, actionLines int) []string {
+	var lines []string
 	if c.LastAction != "" {
-		secondary = widgets.Wrap(c.LastAction, width, actionLines)
+		lines = widgets.Wrap(c.LastAction, width, actionLines)
 	}
-	if len(secondary) == 0 {
-		secondary = []string{widgets.Dash}
+	if len(lines) == 0 {
+		lines = []string{widgets.Dash}
 	}
-	for len(secondary) < actionLines {
-		secondary = append(secondary, "")
+	for len(lines) < actionLines {
+		lines = append(lines, "")
 	}
-
-	lines := []string{dominant}
-	lines = append(lines, secondary...)
 	return lines
 }
 
