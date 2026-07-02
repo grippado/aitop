@@ -293,6 +293,21 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 	return out, nil
 }
 
+// isCursorIDEProcess matches the real Cursor.app IDE process only. A
+// loose strings.Contains(name, "Cursor") false-positives on macOS's own
+// always-running CursorUIViewService (a text-input system helper,
+// nothing to do with the Cursor IDE) and on "cursor-agent" (Cursor's
+// separate CLI/headless agent tool — a real, distinct process this
+// adapter doesn't track today, not the IDE this package is built
+// around). Confirmed in practice: with Cursor.app fully closed, the old
+// check still reported "alive" because of CursorUIViewService.
+func isCursorIDEProcess(name, exe string) bool {
+	if name == "Cursor" || strings.HasPrefix(name, "Cursor Helper") {
+		return true
+	}
+	return strings.HasPrefix(exe, "/Applications/Cursor.app/")
+}
+
 func processAlive(ctx context.Context) bool {
 	procs, err := gproc.ProcessesWithContext(ctx)
 	if err != nil {
@@ -300,7 +315,8 @@ func processAlive(ctx context.Context) bool {
 	}
 	for _, p := range procs {
 		name, _ := p.NameWithContext(ctx)
-		if strings.Contains(name, "Cursor") {
+		exe, _ := p.ExeWithContext(ctx)
+		if isCursorIDEProcess(name, exe) {
 			return true
 		}
 	}

@@ -2,6 +2,26 @@ package cursor
 
 import "testing"
 
+func TestIsCursorIDEProcess(t *testing.T) {
+	cases := []struct {
+		name, exe string
+		want      bool
+	}{
+		{"Cursor", "/Applications/Cursor.app/Contents/MacOS/Cursor", true},
+		{"Cursor Helper", "/Applications/Cursor.app/Contents/Frameworks/Cursor Helper.app/Contents/MacOS/Cursor Helper", true},
+		{"Cursor Helper (Renderer)", "", true},
+		// Real false positives observed in practice on this machine.
+		{"CursorUIViewService", "/System/Library/PrivateFrameworks/TextInputUIMacHelper.framework/Versions/A/XPCServices/CursorUIViewService.xpc/Contents/MacOS/CursorUIViewService", false},
+		{"cursor-agent", "/Users/grippado/.local/bin/cursor-agent", false},
+		{"node", "/Users/grippado/.local/share/cursor-agent/versions/x/node", false},
+	}
+	for _, c := range cases {
+		if got := isCursorIDEProcess(c.name, c.exe); got != c.want {
+			t.Errorf("isCursorIDEProcess(%q, %q) = %v, want %v", c.name, c.exe, got, c.want)
+		}
+	}
+}
+
 func TestIsCursorOwnProcess(t *testing.T) {
 	cases := []struct {
 		name string
