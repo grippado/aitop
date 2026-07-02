@@ -1,6 +1,21 @@
 // Package claude adapts Claude Code CLI state (~/.claude/) into aitop's
 // Source interface: active/recent sessions, real process CPU/mem, and
 // cost/rate-limit usage.
+//
+// Known gap: Claude Desktop's "local agent mode" / Cowork feature runs its
+// own embedded Claude Code sessions inside an isolated VM (confirmed on
+// this machine: Apple's Virtualization.framework hosts it — see
+// ~/Library/Application Support/Claude/vm_bundles/claudevm.bundle/, which
+// has real VM disk images (rootfs.img, sessiondata.img, efivars.fd), plus
+// ~/Library/Application Support/Claude/claude-code-vm/<version>/claude,
+// the guest-side binary). That session's process and its own
+// ~/.claude/sessions/ equivalent live inside the VM's guest filesystem —
+// invisible to this adapter, which only ever reads the HOST's
+// ~/.claude/sessions/ and scans HOST processes. There is no host-visible
+// PID or session file for a Desktop-embedded session to pick up, by the
+// sandbox's own design. Not fixed here — would require querying the VM
+// itself (it exposes an internal IP via vm_bundles/claudevm.bundle/vmIP),
+// which is out of scope: no documented/stable API to rely on.
 package claude
 
 import (
