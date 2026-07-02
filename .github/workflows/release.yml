@@ -21,7 +21,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Run tests
-        run: CGO_ENABLED=0 go test -race ./...
+        run: go test -race ./... # -race requires cgo; goreleaser's own build step still forces CGO_ENABLED=0
 
       - uses: goreleaser/goreleaser-action@v6
         with:

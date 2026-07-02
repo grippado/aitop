@@ -27,13 +27,16 @@ release:
 changelog:
   disable: true
 
-brews:
-  - repository:
-      owner: grippado
-      name: homebrew-aitop
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    homepage: https://github.com/grippado/aitop
-    description: "btop-style real-time resource monitor for AI coding agents (Claude Code, Codex, Cursor)"
-    license: MIT
-    install: |
-      bin.install "aitop"
+# Homebrew tap publishing is disabled until grippado/homebrew-aitop exists and
+# HOMEBREW_TAP_GITHUB_TOKEN is set as a repo secret — until then this block
+# would fail every release trying to auth with a token that isn't there.
+# brews:
+#   - repository:
+#       owner: grippado
+#       name: homebrew-aitop
+#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+#     homepage: https://github.com/grippado/aitop
+#     description: "A live, read-only TUI monitor for AI coding agents (Claude Code, Codex CLI, Cursor) and their contexts"
+#     license: MIT
+#     install: |
+#       bin.install "aitop"

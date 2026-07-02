@@ -20,12 +20,10 @@ curl -fsSL https://raw.githubusercontent.com/grippado/aitop/main/install.sh | sh
 ```
 
 ```sh
-brew install grippado/aitop/aitop
-```
-
-```sh
 go install github.com/grippado/aitop/cmd/aitop@latest
 ```
+
+Homebrew tap (`brew install grippado/aitop/aitop`) is planned but not live yet — it needs a separate `grippado/homebrew-aitop` repo this release doesn't publish to.
 
 ## Usage
 

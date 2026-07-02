@@ -28,3 +28,5 @@ jobs:
 
       - name: Run tests
         run: go test -race ./...
+        env:
+          CGO_ENABLED: 1 # -race requires cgo; only release builds need CGO_ENABLED=0
