@@ -22,8 +22,24 @@ import (
 // Name identifies this Source.
 const Name = "codex"
 
-// namePattern matches the Codex CLI process command line.
-const namePattern = "codex"
+// isCodexProcess matches the actual Codex CLI binary — an exact process
+// name, or argv[0] exactly "codex" / ending in "/codex". A substring
+// match against the whole cmdline (the previous approach) is a real false-
+// positive trap: any unrelated process whose arguments merely MENTION
+// "codex" (a shell command referencing this very package's path, someone
+// editing a file named codex.go, ...) would match. Confirmed in practice:
+// a live debugging shell command got misidentified as a running Codex
+// process this way.
+func isCodexProcess(name, cmdline string) bool {
+	if name == "codex" {
+		return true
+	}
+	argv0 := cmdline
+	if i := strings.IndexByte(cmdline, ' '); i >= 0 {
+		argv0 = cmdline[:i]
+	}
+	return argv0 == "codex" || strings.HasSuffix(argv0, "/codex")
+}
 
 type Adapter struct {
 	home  string
@@ -164,7 +180,7 @@ func (a *Adapter) findLiveCodexPID(ctx context.Context) (int, bool) {
 	for _, p := range procs {
 		name, _ := p.NameWithContext(ctx)
 		cmdline, _ := p.CmdlineWithContext(ctx)
-		if strings.Contains(name, namePattern) || strings.Contains(cmdline, namePattern) {
+		if isCodexProcess(name, cmdline) {
 			return int(p.Pid), true
 		}
 	}

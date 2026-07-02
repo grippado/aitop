@@ -123,10 +123,17 @@ func renderBody(th theme.Theme, c Card, width int) []string {
 	badge, badgeColor := stateBadge(c)
 	badgeStyled := lipgloss.NewStyle().Foreground(badgeColor).Render(badge)
 
-	// Dominant: state badge + context bar. Exactly one of these two
-	// pieces of information dominates the card — this is it.
+	// Dominant: state badge + context. A reliable % (bar) is shown when we
+	// have one; otherwise fall back to the raw token count ("234k ctx")
+	// rather than a bare dash — this is the same number either way
+	// (TokensIn = input + cache_read + cache_creation), and showing it
+	// raw avoids ever presenting a confidently wrong percentage against a
+	// guessed context-window size. Matches the pattern already proven in
+	// this user's own ~/cangaco/.ai/claude/bin/mutirao (its pane-title
+	// "${ctx}k ctx" is the identical (input+cache)/1000 formula).
 	var dominant string
-	if c.HasContext {
+	switch {
+	case c.HasContext:
 		// Reserve exact overhead: badge, 2 spaces, Bar()'s own "[" "]"
 		// brackets, 1 space, and a 4-char pct label ("100%") — len(badge)
 		// would undercount by 2 (● and ◌ are 3-byte UTF-8 runes), so this
@@ -137,7 +144,9 @@ func renderBody(th theme.Theme, c Card, width int) []string {
 			barWidth = 6
 		}
 		dominant = fmt.Sprintf("%s  %s %s", badgeStyled, widgets.Bar(c.ContextPct, barWidth, th.GaugeColor), widgets.PctLabel(c.ContextPct))
-	} else {
+	case c.HasTokens:
+		dominant = fmt.Sprintf("%s  %s ctx", badgeStyled, formatTokens(c.TokensIn))
+	default:
 		dominant = fmt.Sprintf("%s  ctx %s", badgeStyled, widgets.Dash)
 	}
 
