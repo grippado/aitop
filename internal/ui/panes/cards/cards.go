@@ -7,12 +7,14 @@
 // this package's decision to make, and not fixed here since the backend
 // is out of scope for this refactor): SessionInfo.Branch/Dirty/Model are
 // not set by any adapter yet, so the card's tertiary line and model pill
-// will often render "—" / a bare tool name on real data today. Usage
-// (tokens/cost/context%) is tracked per TOOL, not per session — a tool
-// with multiple sessions shows the same tool-wide aggregate on each of
-// its cards, except process-count/CPU-sum, which is attributed to one
-// "representative" session per tool (the alive one with the most recent
-// activity) so it isn't double-counted across cards.
+// will often render "—" / a bare tool name on real data today. Tokens and
+// context% come straight from each session (SessionInfo.TokensIn/
+// TokensOut/ContextUsedPct) when the adapter has a per-session source —
+// Claude Code's own transcript today. Cost/rate-limits have no
+// per-session source and stay tool-wide (every session's card shows the
+// same cost/limit reading for that tool) — process-count/CPU-sum is
+// attributed to one "representative" session per tool (the alive one
+// with the most recent activity) so it isn't double-counted across cards.
 package cards
 
 import (
@@ -159,26 +161,35 @@ func BuildCards(snap domain.Snapshot, toolFilter string) []Card {
 			c.ProcCPUSum += leftoverCPU[s.Tool]
 		}
 
-		// Usage is tool-wide, not session-wide — see package doc. A zero
-		// value here means "this adapter has never actually populated
-		// this field," not "confirmed zero," so it's treated as
-		// unavailable rather than a real reading. Cost is the one
-		// exception: a missing cost-day file really does mean zero spend
-		// recorded, so it's trusted even at 0 as long as Available=true.
+		// Tokens/context% come straight from THIS session (s.TokensIn/
+		// TokensOut/ContextUsedPct) when the adapter has a per-session
+		// source (Claude Code's own transcript) — never the tool-wide
+		// usage below, which used to be applied identically to every
+		// session's card and looked like a bug (two different sessions
+		// showing the same token count, because it was the same number).
+		if s.TokensIn > 0 || s.TokensOut > 0 {
+			c.HasTokens = true
+			c.TokensIn, c.TokensOut = s.TokensIn, s.TokensOut
+		}
+		if s.ContextUsedPct > 0 {
+			c.HasContext = true
+			c.ContextPct = s.ContextUsedPct
+		}
+
+		// Cost/rate-limits genuinely have no per-session source (the
+		// cost-day file is a UUID-keyed sum across the whole tool, and
+		// ccstatusline's cache is one rolling-window reading, not per
+		// conversation) — tool-wide is the honest answer here, unlike
+		// tokens above. A zero value means "this adapter has never
+		// populated this field," not "confirmed zero," so it's treated
+		// as unavailable — except cost, where a missing cost-day file
+		// really does mean zero spend recorded.
 		if u, ok := usageByTool[s.Tool]; ok && u.Available {
 			c.HasCost = true
 			c.CostTodayUSD = u.CostTodayUSD
 			c.CostMonthUSD = u.CostMonthUSD
 			c.LimitFiveHour = u.LimitFiveHour
 			c.LimitWeekly = u.LimitWeekly
-			if u.TokensIn > 0 || u.TokensOut > 0 {
-				c.HasTokens = true
-				c.TokensIn, c.TokensOut = u.TokensIn, u.TokensOut
-			}
-			if u.ContextUsedPct > 0 {
-				c.HasContext = true
-				c.ContextPct = u.ContextUsedPct
-			}
 		}
 
 		out = append(out, c)

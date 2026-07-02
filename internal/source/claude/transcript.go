@@ -44,6 +44,26 @@ func (u transcriptUsage) contextTokens() int64 {
 	return u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
 }
 
+// deriveTokenFields converts a transcriptUsage reading into the
+// TokensIn/TokensOut/ContextUsedPct trio, applying the same "suppress a
+// percentage that violates our own window guess" rule wherever tokens are
+// derived from a transcript. A computed pct over 100% proves
+// contextWindowForModel's guess is wrong for this session (observed in
+// practice on a long-running one) — better to omit it than show a
+// confidently wrong number. Tokens in/out don't depend on that guess and
+// are always populated when usage has any reading at all.
+func deriveTokenFields(usage transcriptUsage) (tokensIn, tokensOut int64, ctxPct float64, hasCtx bool) {
+	tokensIn = usage.contextTokens()
+	tokensOut = usage.OutputTokens
+	if window := contextWindowForModel(usage.Model); window > 0 {
+		if pct := float64(tokensIn) / float64(window) * 100; pct <= 100 {
+			ctxPct = pct
+			hasCtx = true
+		}
+	}
+	return
+}
+
 // contextWindowForModel is a best-effort lookup: every current Claude
 // model this adapter has seen uses a 200k-token context window. If a
 // model reports something unrecognized, 200000 is still used as the

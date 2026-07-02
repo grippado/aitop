@@ -154,39 +154,54 @@ func TestTranscriptTracker_OnlyReadsNewBytesOnSecondCall(t *testing.T) {
 	}
 }
 
-func TestUsage_ContextPctSuppressedWhenOverAssumedWindow(t *testing.T) {
-	setFakeCacheDir(t, "/home/test/.cache")
-	configDir := "/home/test/.claude"
-	sessionID := "s4"
-	transcriptPath := configDir + "/projects/-Users-demo/s4.jsonl"
+func TestDeriveTokenFields_SuppressesPctOverAssumedWindow(t *testing.T) {
+	// cache_read alone (569869-style) blows way past a 200k window.
+	usage := transcriptUsage{Model: "claude-sonnet-5", InputTokens: 2, CacheCreationInputTokens: 1737, CacheReadInputTokens: 569869, OutputTokens: 1122}
+	tokensIn, tokensOut, ctxPct, hasCtx := deriveTokenFields(usage)
+	if tokensIn == 0 || tokensOut == 0 {
+		t.Fatalf("expected real token counts regardless of the window guess, got in=%d out=%d", tokensIn, tokensOut)
+	}
+	if hasCtx || ctxPct != 0 {
+		t.Fatalf("expected ContextUsedPct suppressed when the computed pct exceeds 100%%, got hasCtx=%v pct=%v", hasCtx, ctxPct)
+	}
+}
 
-	// pid 1 (init/launchd) is alive on any Unix test runner — needed
-	// because populateTranscriptUsage only considers Alive sessions, and
-	// Alive is a real gopsutil process-existence check, not mockable here.
+// TestSessions_PerSessionTokensDontMixAcrossSessions is the exact bug
+// reported in practice: two different Claude Code sessions showed
+// identical token counts because Usage() picked one "best" session and
+// applied it tool-wide to every card. Tokens now come from each
+// session's own transcript directly.
+func TestSessions_PerSessionTokensDontMixAcrossSessions(t *testing.T) {
+	configDir := "/home/test/.claude"
 	f := &fakeReader{
 		dirs: map[string][]string{
-			configDir + "/sessions": {"111.json"},
+			configDir + "/sessions": {"111.json", "222.json"},
 		},
 		files: map[string][]byte{
-			configDir + "/sessions/111.json": []byte(`{"pid":1,"sessionId":"` + sessionID + `","cwd":"/Users/demo","status":"busy","updatedAt":1000}`),
-			// cache_read alone (569869-style) blows way past a 200k window.
-			transcriptPath: []byte(transcriptLineFor("claude-sonnet-5", 2, 1737, 569869, 1122)),
+			configDir + "/sessions/111.json":               []byte(`{"pid":1,"sessionId":"sA","cwd":"/Users/demo/a","status":"busy","updatedAt":1000}`),
+			configDir + "/sessions/222.json":               []byte(`{"pid":1,"sessionId":"sB","cwd":"/Users/demo/b","status":"idle","updatedAt":1000}`),
+			configDir + "/projects/-Users-demo-a/sA.jsonl": []byte(transcriptLineFor("claude-sonnet-5", 10, 0, 0, 5)),
+			configDir + "/projects/-Users-demo-b/sB.jsonl": []byte(transcriptLineFor("claude-sonnet-5", 999, 0, 0, 888)),
 		},
 	}
 	withFakeReader(t, f)
 
 	a := &Adapter{configDir: configDir, transcript: newTranscriptTracker()}
-	u, err := a.Usage(nil)
+	sessions, err := a.Sessions(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if u.TokensIn == 0 || u.TokensOut == 0 {
-		t.Fatalf("expected real token counts regardless of the window guess, got %+v", u)
+	byID := map[string]int64{}
+	for _, s := range sessions {
+		byID[s.ID] = s.TokensIn
 	}
-	if u.ContextUsedPct != 0 {
-		t.Fatalf("expected ContextUsedPct suppressed (0/absent) when the computed pct exceeds 100%%, got %v", u.ContextUsedPct)
+	if byID["sA"] != 10 {
+		t.Fatalf("session sA TokensIn = %d, want 10", byID["sA"])
 	}
-	if !u.Available {
-		t.Fatalf("expected Available=true: token counts are real data even though context%% was suppressed")
+	if byID["sB"] != 999 {
+		t.Fatalf("session sB TokensIn = %d, want 999", byID["sB"])
+	}
+	if byID["sA"] == byID["sB"] {
+		t.Fatalf("sessions must not share the same token reading")
 	}
 }

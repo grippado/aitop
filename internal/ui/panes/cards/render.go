@@ -223,7 +223,7 @@ func renderTitle(th theme.Theme, c Card, width int) string {
 	if c.Title == "" {
 		return ""
 	}
-	return lipgloss.NewStyle().Bold(true).Foreground(th.Accent).Render(truncateRight(c.Title, width))
+	return lipgloss.NewStyle().Bold(true).Foreground(th.Accent).Render(widgets.TruncateRight(c.Title, width))
 }
 
 // renderPills builds the card's footer line — left pill for tool identity,
@@ -246,35 +246,15 @@ func renderPills(c Card, width int) string {
 	if budget < 4 {
 		// Not enough room for any meaningful path — drop the right pill
 		// entirely rather than corrupt the line.
-		return truncateRight(leftPill, width)
+		return widgets.TruncateRight(leftPill, width)
 	}
-	rightPill := " " + truncateRight(right, budget-2) + " " // -2 for the pill's own spaces
+	rightPill := " " + widgets.TruncateRight(right, budget-2) + " " // -2 for the pill's own spaces
 
 	gap := width - lipgloss.Width(leftPill) - lipgloss.Width(rightPill)
 	if gap < minGap {
 		gap = minGap
 	}
 	return leftPill + strings.Repeat(" ", gap) + rightPill
-}
-
-// truncateRight keeps the tail of s (the most specific part of a path
-// tends to be its deepest folder), prefixing "…" when it had to cut.
-func truncateRight(s string, max int) string {
-	if max < 1 {
-		return ""
-	}
-	if lipgloss.Width(s) <= max {
-		return s
-	}
-	if max <= 1 {
-		return "…"
-	}
-	runes := []rune(s)
-	keep := max - 1
-	if keep > len(runes) {
-		keep = len(runes)
-	}
-	return "…" + string(runes[len(runes)-keep:])
 }
 
 func renderExpanded(th theme.Theme, c Card) string {

@@ -63,15 +63,34 @@ func (g *Generator) Snapshot() domain.Snapshot {
 			{PID: 52110, Tool: "cursor", Label: "Cursor Helper: mcp-process", CPUPct: 2.0, MemMB: 130, StartedAt: g.start},
 			{PID: 52111, Tool: "cursor", Label: "Cursor Helper (Renderer)", CPUPct: 5.5, MemMB: 620, StartedAt: g.start},
 		},
+		// Sessions carry their OWN tokens/context/title/last-action — kept
+		// deliberately distinct per session (unlike Usage below, which is
+		// tool-wide cost/limits only) to preview the exact thing a real
+		// bug report was about: two sessions of the same tool must never
+		// show identical numbers.
 		Sessions: []domain.SessionInfo{
-			{Tool: "claude-code", ID: "demo-1", PID: 41221, Alive: true, CWD: "/Users/demo/www/guia-cumuru", Branch: "main", Dirty: true, Model: "opus 4.8", Status: "busy", UpdatedAt: now.Add(-14 * time.Minute)},
-			{Tool: "claude-code", ID: "demo-2", PID: 41090, Alive: true, CWD: "/Users/demo/cangaco", Branch: "main", Model: "sonnet 5", Status: "idle", UpdatedAt: now.Add(-2*time.Hour - 14*time.Minute)},
-			{Tool: "codex", ID: "demo-3", PID: 60123, Alive: true, CWD: "/Users/demo/www/isaac/backoffice", Model: "gpt-5.4-mini", Status: "busy", UpdatedAt: now.Add(-6 * time.Minute)},
+			{
+				Tool: "claude-code", ID: "demo-1", PID: 41221, Alive: true, CWD: "/Users/demo/www/guia-cumuru", Branch: "main", Dirty: true, Model: "opus 4.8", Status: "busy", UpdatedAt: now.Add(-14 * time.Minute),
+				Title: "Corrigir tábua de marés", LastAction: "🔧 Bash: go test ./modules/mares/... -run TestTabua",
+				TokensIn: 70000, TokensOut: 21000, ContextUsedPct: claudeCtx,
+			},
+			{
+				Tool: "claude-code", ID: "demo-2", PID: 41090, Alive: true, CWD: "/Users/demo/cangaco", Branch: "main", Model: "sonnet 5", Status: "idle", UpdatedAt: now.Add(-2*time.Hour - 14*time.Minute),
+				Title: "Sincronizar dotfiles", LastAction: "💭 Aguardando confirmação do usuário para o merge",
+				TokensIn: 12400, TokensOut: 3100,
+			},
+			{
+				Tool: "codex", ID: "demo-3", PID: 60123, Alive: true, CWD: "/Users/demo/www/isaac/backoffice", Model: "gpt-5.4-mini", Status: "busy", UpdatedAt: now.Add(-6 * time.Minute),
+				LastAction: "🔧 shell: pnpm --filter backoffice build",
+				TokensIn: 5000, TokensOut: 1200, ContextUsedPct: codexCtx,
+			},
 			{Tool: "cursor", ID: "demo-4", PID: 52110, Alive: true, CWD: "/Users/demo/www/aitop", Status: "busy", UpdatedAt: now.Add(-41 * time.Minute)},
 		},
+		// Usage stays tool-wide: cost and rate limits genuinely have no
+		// per-session source, unlike tokens/context% above.
 		Usage: []domain.UsageInfo{
-			{Tool: "claude-code", Available: true, CostTodayUSD: 0.43, CostMonthUSD: 12.10, TokensIn: 70000, TokensOut: 21000, ContextUsedPct: claudeCtx, LimitFiveHour: &fiveHour, LimitWeekly: &weekly},
-			{Tool: "codex", Available: true, ContextUsedPct: codexCtx, TokensIn: 5000, TokensOut: 1200, LimitFiveHour: &codexFiveHour},
+			{Tool: "claude-code", Available: true, CostTodayUSD: 0.43, CostMonthUSD: 12.10, LimitFiveHour: &fiveHour, LimitWeekly: &weekly},
+			{Tool: "codex", Available: true, LimitFiveHour: &codexFiveHour},
 			{Tool: "cursor", Available: false},
 		},
 	}

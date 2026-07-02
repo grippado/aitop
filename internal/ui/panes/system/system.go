@@ -22,9 +22,16 @@ import (
 // aitop's headline is gone on purpose; this pane's job is a one-glance
 // footnote, not a system-monitor centerpiece.
 func RenderFooter(th theme.Theme, snap domain.Snapshot, width int) string {
-	barWidth := width - 40
+	// Bars are deliberately short — this footer's job is a glance, not a
+	// centerpiece, and a short bar leaves real room for the trailing
+	// figures (pct, MB, agent-share) instead of pushing them past the
+	// terminal edge where they'd get clipped.
+	barWidth := width / 5
 	if barWidth < 10 {
 		barWidth = 10
+	}
+	if barWidth > 24 {
+		barWidth = 24
 	}
 
 	cpuAvg := average(snap.System.PerCoreCPUPct)
@@ -46,6 +53,10 @@ func RenderFooter(th theme.Theme, snap domain.Snapshot, width int) string {
 	for _, p := range snap.Processes {
 		agentMem += p.MemMB
 	}
+	var agentMemShare float64
+	if snap.System.MemTotalMB > 0 {
+		agentMemShare = agentMem / snap.System.MemTotalMB * 100
+	}
 
 	warm := ""
 	if snap.Warming {
@@ -54,11 +65,22 @@ func RenderFooter(th theme.Theme, snap domain.Snapshot, width int) string {
 
 	sep := lipgloss.NewStyle().Foreground(th.Border).Render(strings.Repeat("─", max(1, width)))
 
+	// MEM's bar highlights the agent-attributable slice (harnesses and
+	// whatever they invoke) in the accent color, inside the same used-
+	// memory fill — not a separate bar, a sub-segment of it.
 	line1 := fmt.Sprintf(" SYSTEM   CPU %s %s  (agents: %.0f%% of system)%s",
 		widgets.Bar(cpuAvg, barWidth, th.GaugeColor), widgets.PctLabel(cpuAvg), agentCPUShare, warm)
 	line2 := fmt.Sprintf("          MEM %s %s  %s/%s  (agents: %s)",
-		widgets.Bar(memPct, barWidth, th.GaugeColor), widgets.PctLabel(memPct), formatMB(snap.System.MemUsedMB), formatMB(snap.System.MemTotalMB), formatMB(agentMem))
+		widgets.SegmentedBar(memPct, agentMemShare, barWidth, th.GaugeColor(memPct), th.Accent), widgets.PctLabel(memPct), formatMB(snap.System.MemUsedMB), formatMB(snap.System.MemTotalMB), formatMB(agentMem))
 	line3 := fmt.Sprintf("          NET ↑ %s/s  ↓ %s/s", formatBps(snap.System.NetUpBps), formatBps(snap.System.NetDownBps))
+
+	// These lines already contain ANSI-styled substrings from the bars —
+	// lipgloss.Style.MaxWidth truncates ANSI-aware (verified: it doesn't
+	// corrupt escape codes mid-sequence the way a raw rune-slice would).
+	safe := lipgloss.NewStyle().MaxWidth(width)
+	line1 = safe.Render(line1)
+	line2 = safe.Render(line2)
+	line3 = safe.Render(line3)
 
 	return lipgloss.JoinVertical(lipgloss.Left, sep, line1, line2, line3, sep)
 }

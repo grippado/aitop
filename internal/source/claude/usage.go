@@ -45,6 +45,14 @@ type ccstatuslineUsage struct {
 	WeeklyResetAt  string  `json:"weeklyResetAt"`
 }
 
+// Usage reports tool-wide cost and rate limits only. Tokens/context% used
+// to be approximated here from an arbitrarily-picked "best" session and
+// applied uniformly to every session's card — which looked like a bug
+// (and was reported as one): two different sessions showing identical
+// token counts. That data now lives on each SessionInfo directly (see
+// Sessions(), which already tails every session's own transcript for
+// Title/LastAction and grabs its token reading at the same time) —
+// genuinely per-session, not a tool-wide stand-in.
 func (a *Adapter) Usage(ctx context.Context) (domain.UsageInfo, error) {
 	u := domain.UsageInfo{Tool: Name}
 
@@ -73,81 +81,12 @@ func (a *Adapter) Usage(ctx context.Context) (domain.UsageInfo, error) {
 		}
 	}
 
-	tokensFound := a.populateTranscriptUsage(ctx, &u)
-
 	// Available only when at least one field above is a genuine reading —
 	// never true with every field left at its zero value, which would
-	// read as "confirmed $0, 0 tokens, 0% context" when really nothing
-	// was found at all.
-	u.Available = costFound || limitsFound || tokensFound
+	// read as "confirmed $0" when really nothing was found at all.
+	u.Available = costFound || limitsFound
 
 	return u, nil
-}
-
-// populateTranscriptUsage fills TokensIn/TokensOut/ContextUsedPct from the
-// most relevant active session's own transcript — ccstatusline's cache has
-// no equivalent field (rate limits only), but Claude Code's transcript
-// carries real per-turn token usage. Usage() is tool-wide (the Source
-// contract has no per-session granularity), so the "most relevant" alive
-// session is picked: prefer one actually busy, else the most recently
-// updated alive one. Returns false if no alive session exists at all, or
-// its transcript has no usage line yet.
-func (a *Adapter) populateTranscriptUsage(ctx context.Context, u *domain.UsageInfo) bool {
-	sessions, err := a.Sessions(ctx)
-	if err != nil {
-		return false
-	}
-
-	var best *sessionForUsage
-	for i := range sessions {
-		s := sessions[i]
-		if !s.Alive {
-			continue
-		}
-		cand := sessionForUsage{id: s.ID, cwd: s.CWD, status: s.Status, updatedAt: s.UpdatedAt}
-		if best == nil || cand.betterThan(*best) {
-			best = &cand
-		}
-	}
-	if best == nil {
-		return false
-	}
-
-	usage, ok := a.transcript.usageFor(a.configDir, best.cwd, best.id)
-	if !ok {
-		return false
-	}
-
-	u.TokensIn = usage.InputTokens + usage.CacheCreationInputTokens + usage.CacheReadInputTokens
-	u.TokensOut = usage.OutputTokens
-
-	// ContextUsedPct depends on contextWindowForModel's guessed window
-	// size, which is NOT authoritative (this adapter has no access to the
-	// real per-model context window Claude Code itself uses). A result
-	// over 100% is proof the guess is wrong for this session (observed in
-	// practice on a very long-running session) — showing it anyway would
-	// be a confidently wrong number, worse than showing none. Tokens
-	// in/out above are unaffected by this uncertainty and stay populated
-	// either way.
-	if window := contextWindowForModel(usage.Model); window > 0 {
-		if pct := float64(u.TokensIn) / float64(window) * 100; pct <= 100 {
-			u.ContextUsedPct = pct
-		}
-	}
-	return true
-}
-
-type sessionForUsage struct {
-	id, cwd, status string
-	updatedAt       time.Time
-}
-
-func (a sessionForUsage) betterThan(b sessionForUsage) bool {
-	aBusy, bBusy := a.status == "busy", b.status == "busy"
-	if aBusy != bBusy {
-		return aBusy
-	}
-	return a.updatedAt.After(b.updatedAt)
 }
 
 func costDayPath(configDir string, t time.Time) string {

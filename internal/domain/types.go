@@ -40,6 +40,16 @@ type SessionInfo struct {
 	// working on — e.g. Claude Code's own auto-generated "ai-title" for
 	// the conversation. Empty when the adapter has no such source.
 	Title string `json:"title,omitempty"`
+
+	// TokensIn/TokensOut/ContextUsedPct are THIS session's own token
+	// usage, when the adapter can read a per-session source (Claude
+	// Code's own transcript today) — deliberately separate from
+	// UsageInfo, which is tool-wide by contract and would otherwise show
+	// the same numbers on every session's card. Zero/0 means
+	// unavailable, not a real zero reading.
+	TokensIn       int64   `json:"tokens_in,omitempty"`
+	TokensOut      int64   `json:"tokens_out,omitempty"`
+	ContextUsedPct float64 `json:"context_used_pct,omitempty"`
 }
 
 // UsageInfo describes cost/token/rate-limit usage for a tool. Available=false
