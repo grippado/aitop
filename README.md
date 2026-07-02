@@ -2,7 +2,7 @@
 
 **This `aitop`:** a live, read-only monitor of your AI coding *agents and their contexts* — Claude Code, Codex CLI, Cursor, cursor-agent CLI, opencode — one card per session, showing what it's doing, which model is driving it, how full its context window is, and its token burn, all in one terminal pane. System resources (CPU/MEM/NET) are a condensed footnote at the bottom, not the headline. If you were looking for a pure cost/token tracker, that's a different `aitop` ([bugkill3r/aitop](https://github.com/bugkill3r/aitop) or [samusgray/aitop](https://github.com/samusgray/aitop)) — this one is a context board for your agents, `btop`-styled, not a spend dashboard.
 
-<!-- TODO before launch: record `aitop --demo` and drop the GIF here. -->
+![aitop demo](demo.gif)
 
 ## What it does
 

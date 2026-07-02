@@ -32,3 +32,15 @@ Implement `source.Source` (`internal/source/source.go`) for the new tool under `
 ## Security-sensitive adapters
 
 If your adapter touches a directory that could contain credentials (API keys, tokens, cookies), do not use `filepath.Walk`/`filepath.Glob` over that directory. Use an explicit named-path allowlist instead, and add a test asserting the credential file is never in that allowlist — see `internal/source/codex/allowlist_test.go`.
+
+## Updating the README demo GIF
+
+`demo.gif` is recorded with [VHS](https://github.com/charmbracelet/vhs) from `vhs.tape`, against `--demo` mode's synthetic sessions (`internal/demo/demo.go`) — never real tool state, so the recording is reproducible on any machine.
+
+```sh
+brew install vhs   # pulls in ttyd + ffmpeg
+go build -o aitop ./cmd/aitop/
+vhs vhs.tape        # writes demo.gif
+```
+
+If the card layout changes, re-record rather than hand-editing the GIF. `vhs.tape`'s `Set FontFamily` must name a monospace family that's actually installed (check with `system_profiler SPFontsDataType | grep -i <name>` on macOS) — a proportional fallback silently breaks every box-drawing/bar-alignment in the recording without erroring.
