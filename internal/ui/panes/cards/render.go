@@ -139,32 +139,13 @@ func renderBody(th theme.Theme, c Card, width int, actionLines int) []string {
 	badge, badgeColor := stateBadge(c)
 	badgeStyled := lipgloss.NewStyle().Foreground(badgeColor).Render(badge)
 
-	// Dominant: state badge + context. A reliable % (bar) is shown when we
-	// have one; otherwise fall back to the raw token count ("234k ctx")
-	// rather than a bare dash — this is the same number either way
-	// (TokensIn = input + cache_read + cache_creation), and showing it
-	// raw avoids ever presenting a confidently wrong percentage against a
-	// guessed context-window size. Matches the pattern already proven in
-	// this user's own ~/cangaco/.ai/claude/bin/mutirao (its pane-title
-	// "${ctx}k ctx" is the identical (input+cache)/1000 formula).
-	var dominant string
-	switch {
-	case c.HasContext:
-		// Reserve exact overhead: badge, 2 spaces, Bar()'s own "[" "]"
-		// brackets, 1 space, and a 4-char pct label ("100%") — len(badge)
-		// would undercount by 2 (● and ◌ are 3-byte UTF-8 runes), so this
-		// uses display width, not byte length.
-		overhead := lipgloss.Width(badge) + 2 + 2 + 1 + 4
-		barWidth := width - overhead
-		if barWidth < 6 {
-			barWidth = 6
-		}
-		dominant = fmt.Sprintf("%s  %s %s", badgeStyled, widgets.Bar(c.ContextPct, barWidth, th.GaugeColor), widgets.PctLabel(c.ContextPct))
-	case c.HasTokens:
-		dominant = fmt.Sprintf("%s  %s ctx", badgeStyled, formatTokens(c.TokensIn))
-	default:
-		dominant = fmt.Sprintf("%s  ctx %s", badgeStyled, widgets.Dash)
-	}
+	// Dominant: the state badge, alone. Context/tokens used to be crammed
+	// onto this line too (a bar sometimes, raw "234k ctx" text other
+	// times depending on whether the pct was reliable) — redundant with
+	// the token gutter's IN figure (the same contextTokens() sum) and
+	// inconsistent card-to-card. That richer context reading now lives on
+	// its own line — see tertiary below.
+	dominant := badgeStyled
 
 	// Secondary: last session action, read from the session's own
 	// transcript when the adapter supports it (Claude Code today) —
@@ -182,21 +163,47 @@ func renderBody(th theme.Theme, c Card, width int, actionLines int) []string {
 		secondary = append(secondary, "")
 	}
 
-	// Tertiary: whatever the ~{PWD} footer pill doesn't already cover —
-	// branch/dirty state. Also unpopulated by any adapter today.
-	tertiary := widgets.Dash
-	if c.Branch != "" {
+	// Tertiary: the context-window reading — "Context: [bar] USED/TOTAL
+	// (PCT%)" — moved here from the dominant line (see above). Falls back
+	// to branch/dirty (whatever the ~{PWD} footer pill doesn't already
+	// cover) when context isn't available, then a bare dash. Branch/dirty
+	// is unpopulated by any adapter today, so in practice this line is
+	// context or nothing right now — but the fallback chain is what keeps
+	// that a "today" fact, not a hardcoded assumption.
+	var tertiary string
+	switch {
+	case c.HasContext:
+		tertiary = renderContextLine(th, c, width)
+	case c.Branch != "":
 		dirty := ""
 		if c.Dirty {
 			dirty = "*"
 		}
 		tertiary = c.Branch + dirty
+	default:
+		tertiary = widgets.Dash
 	}
 
 	lines := []string{dominant}
 	lines = append(lines, secondary...)
 	lines = append(lines, tertiary)
 	return lines
+}
+
+// renderContextLine draws "Context: [bar] USED/TOTAL (PCT%)". TOTAL isn't
+// stored on Card directly — it's derived from TokensIn/ContextPct
+// (TokensIn = TOTAL * ContextPct/100), which keeps this UI-layer function
+// ignorant of any specific model's window size instead of hardcoding one.
+func renderContextLine(th theme.Theme, c Card, width int) string {
+	label := "Context: "
+	total := int64(float64(c.TokensIn) * 100 / c.ContextPct)
+	suffix := fmt.Sprintf(" %s/%s (%s)", formatTokens(c.TokensIn), formatTokens(total), widgets.PctLabel(c.ContextPct))
+
+	barWidth := width - lipgloss.Width(label) - lipgloss.Width(suffix) - 2 // Bar()'s own "[" "]"
+	if barWidth < 6 {
+		barWidth = 6
+	}
+	return label + widgets.Bar(c.ContextPct, barWidth, th.GaugeColor) + suffix
 }
 
 func stateBadge(c Card) (string, lipgloss.Color) {
@@ -257,6 +264,14 @@ func renderPills(c Card, width int) string {
 	return leftPill + strings.Repeat(" ", gap) + rightPill
 }
 
+// renderExpanded draws the card's expanded-only detail line (5h/7d limits
+// + process summary). Cost (today/month $) was dropped from here: on this
+// adapter's actual data source, the cost-day file mechanism is dead (no
+// file has been written in weeks — see claude/usage.go), so it always
+// rendered "$0.00 · $0.00" — dead weight, not a real reading, not worth
+// the line space. c.CostTodayUSD/CostMonthUSD stay on Card in case a
+// future source makes cost real again; this function just stops
+// displaying them until there's something to show.
 func renderExpanded(th theme.Theme, c Card) string {
 	muted := lipgloss.NewStyle().Foreground(th.Muted)
 	if !c.HasCost {
@@ -273,7 +288,7 @@ func renderExpanded(th theme.Theme, c Card) string {
 	if c.ProcCount > 0 {
 		procs = fmt.Sprintf("%d procs, %.0f%% CPU summed", c.ProcCount, c.ProcCPUSum)
 	}
-	return muted.Render(fmt.Sprintf("today $%.2f · month $%.2f · 5h %s · 7d %s · %s", c.CostTodayUSD, c.CostMonthUSD, limit5, limit7, procs))
+	return muted.Render(fmt.Sprintf("5h %s · 7d %s · %s", limit5, limit7, procs))
 }
 
 func friendlyTool(tool string) string {

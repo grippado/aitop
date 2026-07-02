@@ -155,8 +155,11 @@ func TestTranscriptTracker_OnlyReadsNewBytesOnSecondCall(t *testing.T) {
 }
 
 func TestDeriveTokenFields_SuppressesPctOverAssumedWindow(t *testing.T) {
-	// cache_read alone (569869-style) blows way past a 200k window.
-	usage := transcriptUsage{Model: "claude-sonnet-5", InputTokens: 2, CacheCreationInputTokens: 1737, CacheReadInputTokens: 569869, OutputTokens: 1122}
+	// The window guess was corrected from 200k to 1M (see
+	// contextWindowForModel's doc comment) after 200k proved wrong in
+	// practice — this fixture now needs to exceed 1M to still exercise
+	// suppression at all.
+	usage := transcriptUsage{Model: "claude-sonnet-5", InputTokens: 2, CacheCreationInputTokens: 100000, CacheReadInputTokens: 2000000, OutputTokens: 1122}
 	tokensIn, tokensOut, ctxPct, hasCtx := deriveTokenFields(usage)
 	if tokensIn == 0 || tokensOut == 0 {
 		t.Fatalf("expected real token counts regardless of the window guess, got in=%d out=%d", tokensIn, tokensOut)

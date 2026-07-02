@@ -64,13 +64,17 @@ func deriveTokenFields(usage transcriptUsage) (tokensIn, tokensOut int64, ctxPct
 	return
 }
 
-// contextWindowForModel is a best-effort lookup: every current Claude
-// model this adapter has seen uses a 200k-token context window. If a
-// model reports something unrecognized, 200000 is still used as the
-// default rather than leaving ContextUsedPct entirely unavailable —
-// noted here in case a future model changes this.
+// contextWindowForModel is a best-effort lookup, corrected once already:
+// this adapter originally guessed 200k and got a nonsensical 297% on a
+// real long-running session. Checking that same session's token count
+// against 1,000,000 instead (826034 / 1000000 = 82.6%) matches a
+// reference reading of "817k/1000k (82%)" almost exactly (the small
+// delta is just the session growing between the two readings) — so 1M is
+// now the default. Still a guess, not read from Claude Code itself, and
+// still subject to deriveTokenFields' >100% suppression if some other
+// model's real window turns out smaller.
 func contextWindowForModel(model string) int64 {
-	return 200000
+	return 1_000_000
 }
 
 // contentBlock mirrors one entry of message.content[] — confirmed shape

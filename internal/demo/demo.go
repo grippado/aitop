@@ -82,7 +82,7 @@ func (g *Generator) Snapshot() domain.Snapshot {
 			{
 				Tool: "codex", ID: "demo-3", PID: 60123, Alive: true, CWD: "/Users/demo/www/isaac/backoffice", Model: "gpt-5.4-mini", Status: "busy", UpdatedAt: now.Add(-6 * time.Minute),
 				LastAction: "🔧 shell: pnpm --filter backoffice build",
-				TokensIn: 5000, TokensOut: 1200, ContextUsedPct: codexCtx,
+				TokensIn:   5000, TokensOut: 1200, ContextUsedPct: codexCtx,
 			},
 			{Tool: "cursor", ID: "demo-4", PID: 52110, Alive: true, CWD: "/Users/demo/www/aitop", Status: "busy", UpdatedAt: now.Add(-41 * time.Minute)},
 		},
