@@ -30,12 +30,14 @@ type Theme struct {
 	// Per-tool identity colors — this is what lets a card's border say
 	// "this one's Codex" at a glance across a board of many cards. Keys
 	// are the Source.Name() strings used throughout the backend
-	// (claude-code, codex, cursor); anything else (fallback/unknown
-	// process-name matches) gets ToolUnknown.
-	ToolClaude  lipgloss.Color
-	ToolCodex   lipgloss.Color
-	ToolCursor  lipgloss.Color
-	ToolUnknown lipgloss.Color
+	// (claude-code, codex, cursor, cursor-agent, opencode); anything else
+	// (fallback/unknown process-name matches) gets ToolUnknown.
+	ToolClaude      lipgloss.Color
+	ToolCodex       lipgloss.Color
+	ToolCursor      lipgloss.Color
+	ToolCursorAgent lipgloss.Color
+	ToolOpencode    lipgloss.Color
+	ToolUnknown     lipgloss.Color
 }
 
 // BtopClassic mirrors real btop's default palette (green/yellow/red gauge
@@ -56,10 +58,12 @@ var BtopClassic = Theme{
 	TokenIn:  lipgloss.Color("2"), // green
 	TokenOut: lipgloss.Color("1"), // red
 
-	ToolClaude:  lipgloss.Color("209"), // coral
-	ToolCodex:   lipgloss.Color("36"),  // teal
-	ToolCursor:  lipgloss.Color("141"), // light purple
-	ToolUnknown: lipgloss.Color("245"), // same as Muted
+	ToolClaude:      lipgloss.Color("209"), // coral
+	ToolCodex:       lipgloss.Color("36"),  // teal
+	ToolCursor:      lipgloss.Color("141"), // light purple
+	ToolCursorAgent: lipgloss.Color("213"), // pink — distinct from Cursor's light purple
+	ToolOpencode:    lipgloss.Color("220"), // gold
+	ToolUnknown:     lipgloss.Color("245"), // same as Muted
 }
 
 // Default returns aitop's default (and, in v1, only) theme.
@@ -90,6 +94,10 @@ func (t Theme) ToolColor(tool string) lipgloss.Color {
 		return t.ToolCodex
 	case tool == "cursor":
 		return t.ToolCursor
+	case tool == "cursor-agent":
+		return t.ToolCursorAgent
+	case tool == "opencode":
+		return t.ToolOpencode
 	default:
 		return t.ToolUnknown
 	}

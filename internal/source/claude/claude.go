@@ -111,6 +111,7 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 		if usage, ok := a.transcript.usageFor(a.configDir, sf.CWD, sf.SessionID); ok {
 			si.LastAction = usage.LastAction
 			si.Title = usage.Title
+			si.Model = friendlyModelName(usage.Model)
 			si.TokensIn, si.TokensOut, si.ContextUsedPct, _ = deriveTokenFields(usage)
 		}
 		out = append(out, si)

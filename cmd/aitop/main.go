@@ -20,7 +20,9 @@ import (
 	"github.com/grippado/aitop/internal/source/claude"
 	"github.com/grippado/aitop/internal/source/codex"
 	"github.com/grippado/aitop/internal/source/cursor"
+	"github.com/grippado/aitop/internal/source/cursoragent"
 	"github.com/grippado/aitop/internal/source/fallback"
+	"github.com/grippado/aitop/internal/source/opencode"
 	"github.com/grippado/aitop/internal/ui"
 	"github.com/grippado/aitop/internal/version"
 )
@@ -46,7 +48,7 @@ func main() {
 		pull = gen.Snapshot
 	} else {
 		ctx := context.Background()
-		all := []source.Source{claude.New(), codex.New(), cursor.New(), fallback.New()}
+		all := []source.Source{claude.New(), codex.New(), cursor.New(), cursoragent.New(), opencode.New(), fallback.New()}
 		coll := collector.New(source.Resolve(ctx, all), *refresh)
 		pull = coll.Snapshot
 	}

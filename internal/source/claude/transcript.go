@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -62,6 +63,28 @@ func deriveTokenFields(usage transcriptUsage) (tokensIn, tokensOut int64, ctxPct
 		}
 	}
 	return
+}
+
+// claudeModelPattern matches Claude's own API model id shape, e.g.
+// "claude-opus-4-8" or "claude-sonnet-5" — confirmed on this machine's
+// real transcripts, alongside "<synthetic>", a special internal marker
+// some transcript lines carry that is NOT a real model (friendlyModelName
+// deliberately returns "" for it: the regex just doesn't match).
+var claudeModelPattern = regexp.MustCompile(`^claude-([a-z]+)-(\d+)(?:-(\d+))?$`)
+
+// friendlyModelName turns a raw model id into the short display label
+// cards show in their tool pill, e.g. "claude-opus-4-8" -> "opus 4.8",
+// "claude-sonnet-5" -> "sonnet 5". Returns "" for anything that doesn't
+// match this shape rather than showing a raw/internal id verbatim.
+func friendlyModelName(model string) string {
+	m := claudeModelPattern.FindStringSubmatch(model)
+	if m == nil {
+		return ""
+	}
+	if m[3] == "" {
+		return m[1] + " " + m[2]
+	}
+	return m[1] + " " + m[2] + "." + m[3]
 }
 
 // contextWindowForModel is a best-effort lookup, corrected once already:

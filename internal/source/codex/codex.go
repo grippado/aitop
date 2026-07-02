@@ -183,6 +183,9 @@ func (a *Adapter) enrichWithTranscript(si *domain.SessionInfo) {
 	if usage.Title != "" {
 		si.Title = usage.Title
 	}
+	if usage.Model != "" {
+		si.Model = usage.Model
+	}
 }
 
 func (a *Adapter) readHistory() []historyEntry {

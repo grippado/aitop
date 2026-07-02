@@ -33,6 +33,14 @@ type eventMsgPayload struct {
 	} `json:"info"`
 }
 
+// turnContextPayload covers the "turn_context" envelope — confirmed on
+// this machine's real rollout data to carry the model actually driving
+// this turn (e.g. "gpt-5.4-mini"), unlike Claude's transcript where the
+// model has to be read off each assistant message instead.
+type turnContextPayload struct {
+	Model string `json:"model"`
+}
+
 // responseItemPayload covers "function_call" and "message" response_items
 // — Codex's equivalent of Claude's tool_use/text content blocks.
 type responseItemPayload struct {
@@ -61,6 +69,10 @@ type codexUsage struct {
 	// clamped — a real quote from the session, not a fabricated summary,
 	// kept for the same visual slot Claude's title occupies.
 	Title string
+	// Model is read straight off turn_context, e.g. "gpt-5.4-mini" —
+	// already a short, real, human-readable id, unlike Claude's raw
+	// "claude-opus-4-8" strings, so no reformatting is applied here.
+	Model string
 }
 
 // codexTranscriptTracker tail-follows each session's rollout file for its
@@ -144,6 +156,12 @@ func (t *codexTranscriptTracker) ingest(sessionID string, data []byte) {
 			continue
 		}
 		switch env.Type {
+		case "turn_context":
+			var tc turnContextPayload
+			if err := json.Unmarshal(env.Payload, &tc); err == nil && tc.Model != "" {
+				found.Model = tc.Model
+				have = true
+			}
 		case "event_msg":
 			var em eventMsgPayload
 			if err := json.Unmarshal(env.Payload, &em); err != nil {

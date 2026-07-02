@@ -49,10 +49,13 @@ func RenderGrid(th theme.Theme, cs []Card, selected int, width int) string {
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 
-// RenderCard draws one 3-zone card: a narrow token gutter, a vertical
-// divider, a dominant/secondary/tertiary body, and a footer pill row.
-// Every card always shows its usage detail (5h/7d limits + process
-// summary) below the body — there is no collapsed mode.
+// RenderCard draws one card in three vertically stacked zones, each
+// divided from the next by a full-width rule: a header (title, breathing
+// room above and below its rule), a body (a narrow token gutter, a
+// vertical divider, and the dominant state badge + last-action text), and
+// a footer (the tool/model/cwd pill, the context-window reading, and the
+// 5h/7d usage detail) — there is no collapsed mode, every card always
+// shows all three.
 //
 // lipgloss width arithmetic (verified empirically, not assumed): the final
 // rendered block's total width = Style.Width(n) + 2 (the rounded border,
@@ -80,14 +83,15 @@ func RenderCard(th theme.Theme, c Card, width int, selected bool) string {
 		bodyWidth = 10
 	}
 
-	// Last action always gets 4 lines — everything else (dominant +
-	// tertiary) stays 1 line each, so the card's total body height is
-	// 1 + actionLines + 1.
-	const actionLines = 4
-	totalLines := 1 + actionLines + 1
+	// Last action gets 5 lines now that the context reading no longer
+	// shares this block (it moved to the footer, below) — room enough to
+	// actually read a wrapped tool call or thinking snippet, not just its
+	// first couple of words. Dominant (the state badge) stays 1 line.
+	const actionLines = 5
+	totalLines := 1 + actionLines
 
 	gutter := renderGutter(th, c)
-	body := renderBody(th, c, bodyWidth, actionLines)
+	body := renderBody(c, bodyWidth, actionLines)
 
 	gutterLines := padLines(gutter, totalLines)
 	bodyLines := padLines(body, totalLines)
@@ -98,14 +102,17 @@ func RenderCard(th theme.Theme, c Card, width int, selected bool) string {
 		mid = append(mid, lipgloss.NewStyle().Width(gutterWidth).Render(gutterLines[i])+divider+" "+bodyLines[i])
 	}
 
-	pillLine := renderPills(c, textWidth)
+	rule := lipgloss.NewStyle().Foreground(th.Border).Render(strings.Repeat("─", textWidth))
 
 	var lines []string
 	if title := renderTitle(th, c, textWidth); title != "" {
-		lines = append(lines, title)
+		lines = append(lines, title, "")
 	}
+	lines = append(lines, rule, "")
 	lines = append(lines, mid...)
-	lines = append(lines, "", pillLine)
+	lines = append(lines, rule)
+	lines = append(lines, renderPills(c, textWidth))
+	lines = append(lines, renderContextOrFallback(th, c, textWidth))
 
 	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
 	content = lipgloss.JoinVertical(lipgloss.Left, content, renderExpanded(th, c))
@@ -132,7 +139,7 @@ func renderGutter(th theme.Theme, c Card) []string {
 	}
 }
 
-func renderBody(th theme.Theme, c Card, width int, actionLines int) []string {
+func renderBody(c Card, width int, actionLines int) []string {
 	badge, badgeColor := stateBadge(c)
 	badgeStyled := lipgloss.NewStyle().Foreground(badgeColor).Render(badge)
 
@@ -140,15 +147,14 @@ func renderBody(th theme.Theme, c Card, width int, actionLines int) []string {
 	// onto this line too (a bar sometimes, raw "234k ctx" text other
 	// times depending on whether the pct was reliable) — redundant with
 	// the token gutter's IN figure (the same contextTokens() sum) and
-	// inconsistent card-to-card. That richer context reading now lives on
-	// its own line — see tertiary below.
+	// inconsistent card-to-card. That richer context reading lives in the
+	// footer instead now — see renderContextOrFallback.
 	dominant := badgeStyled
 
 	// Secondary: last session action, read from the session's own
 	// transcript when the adapter supports it (Claude Code today) —
-	// word-wrapped across actionLines lines (2 by default, 4 when
-	// expanded), never a fabricated activity string. "—" when the
-	// adapter has no such source (Codex, Cursor).
+	// word-wrapped across actionLines lines, never a fabricated activity
+	// string. "—" when the adapter has no such source (Codex, Cursor).
 	var secondary []string
 	if c.LastAction != "" {
 		secondary = widgets.Wrap(c.LastAction, width, actionLines)
@@ -160,31 +166,31 @@ func renderBody(th theme.Theme, c Card, width int, actionLines int) []string {
 		secondary = append(secondary, "")
 	}
 
-	// Tertiary: the context-window reading — "Context: [bar] USED/TOTAL
-	// (PCT%)" — moved here from the dominant line (see above). Falls back
-	// to branch/dirty (whatever the ~{PWD} footer pill doesn't already
-	// cover) when context isn't available, then a bare dash. Branch/dirty
-	// is unpopulated by any adapter today, so in practice this line is
-	// context or nothing right now — but the fallback chain is what keeps
-	// that a "today" fact, not a hardcoded assumption.
-	var tertiary string
+	lines := []string{dominant}
+	lines = append(lines, secondary...)
+	return lines
+}
+
+// renderContextOrFallback draws the card's footer context-window reading
+// — "Context: [bar] USED/TOTAL (PCT%)" — below the tool/cwd pill. Falls
+// back to branch/dirty (whatever the ~{PWD} pill doesn't already cover)
+// when context isn't available, then a bare dash. Branch/dirty is
+// unpopulated by any adapter today, so in practice this line is context
+// or nothing right now — but the fallback chain is what keeps that a
+// "today" fact, not a hardcoded assumption.
+func renderContextOrFallback(th theme.Theme, c Card, width int) string {
 	switch {
 	case c.HasContext:
-		tertiary = renderContextLine(th, c, width)
+		return renderContextLine(th, c, width)
 	case c.Branch != "":
 		dirty := ""
 		if c.Dirty {
 			dirty = "*"
 		}
-		tertiary = c.Branch + dirty
+		return c.Branch + dirty
 	default:
-		tertiary = widgets.Dash
+		return widgets.Dash
 	}
-
-	lines := []string{dominant}
-	lines = append(lines, secondary...)
-	lines = append(lines, tertiary)
-	return lines
 }
 
 // renderContextLine draws "Context: [bar] USED/TOTAL (PCT%)". TOTAL isn't
@@ -236,7 +242,7 @@ func renderTitle(th theme.Theme, c Card, width int) string {
 func renderPills(c Card, width int) string {
 	left := friendlyTool(c.Tool)
 	if c.Model != "" {
-		left += " | " + c.Model
+		left += " (" + c.Model + ")"
 	}
 	leftPill := " " + left + " "
 
@@ -296,6 +302,10 @@ func friendlyTool(tool string) string {
 		return "codex"
 	case "cursor":
 		return "cursor"
+	case "cursor-agent":
+		return "cursor agent"
+	case "opencode":
+		return "opencode"
 	default:
 		return strings.TrimPrefix(tool, "unknown:")
 	}

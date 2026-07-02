@@ -22,7 +22,10 @@ const Name = "fallback"
 // DefaultPatterns are matched case-sensitively against each process's
 // command line. Extend via WithPatterns — a future ~/.config/aitop/
 // config.toml `[[fallback.patterns]]` array feeds this same constructor.
-var DefaultPatterns = []string{"aider", "windsurf", "opencode"}
+// opencode used to be here before it got its own dedicated adapter (see
+// internal/source/opencode) — left out now so its processes aren't
+// double-counted under both "unknown:opencode" and "opencode".
+var DefaultPatterns = []string{"aider", "windsurf"}
 
 type Adapter struct {
 	patterns []string

@@ -10,6 +10,8 @@ go vet ./...
 
 Every adapter package (`internal/source/<tool>/`) keeps its filesystem/process access behind a `Reader`/`Runner`-style interface defined in a `runner.go` file — that's the only file in the package allowed to touch `os.ReadFile`/`os.ReadDir`/`os.Stat` directly. Tests swap that interface for a fake; never spawn real subprocesses or touch a real `~/.claude`/`~/.codex`/Cursor directory in a test.
 
+One exception: `internal/source/opencode` reads its tool's real state from a SQLite database (`database/sql` + `modernc.org/sqlite`, pure Go — no cgo, keeps `CGO_ENABLED=0` release builds intact) rather than plain files. That access does NOT go through the `Reader` interface — SQL query behavior is tested against a real temporary SQLite file instead (see `opencode_test.go`'s `openTestDB`), which is more faithful than faking byte-level file parsing would be. The `Reader` interface in that package still covers everything that IS plain-file access (`Detect()`, the models.json cache).
+
 ## Adding a new theme
 
 v1 ships exactly one theme (`btop-classic`, in `internal/ui/theme/theme.go`). All of aitop's colors live in that single `Theme` struct on purpose — adding a new one is meant to be a small, self-contained PR:
