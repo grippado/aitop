@@ -52,7 +52,13 @@ type composerHeadersFile struct {
 // shape on this machine's real data (a much larger struct in practice;
 // only the fields this adapter reads are declared). type 1 is the user's
 // own message, type 2 is the assistant's (either commentary text or a
-// tool call, distinguished by ToolFormerData being present).
+// tool call, distinguished by ToolFormerData being present). ModelInfo is
+// sparse — confirmed present on some bubbles, not every one (only seen on
+// a type-1/user bubble on this machine's real data, likely recorded once
+// per turn's request configuration rather than on every message) — so
+// it's read the same "keep the latest non-empty reading" way as
+// LastAction/tokens below, not required on the specific bubble carrying
+// the rest of a reading.
 type bubble struct {
 	Type           int    `json:"type"`
 	Text           string `json:"text"`
@@ -63,6 +69,9 @@ type bubble struct {
 		InputTokens  int64 `json:"inputTokens"`
 		OutputTokens int64 `json:"outputTokens"`
 	} `json:"tokenCount"`
+	ModelInfo *struct {
+		ModelName string `json:"modelName"`
+	} `json:"modelInfo"`
 }
 
 // composerUsage is the latest reading found in a composer's own bubbles.
@@ -70,6 +79,7 @@ type composerUsage struct {
 	LastAction string
 	TokensIn   int64
 	TokensOut  int64
+	Model      string
 }
 
 // composerStore is a lazily-opened, read-only connection to Cursor's own
@@ -156,11 +166,12 @@ func (s *composerStore) bestComposerForWorkspace(workspaceLabel string) (compose
 }
 
 // usageForComposer reads composerID's own message bubbles for the most
-// recent last-action reading and the most recent non-zero token count —
-// the same "keep whatever was last found, overwrite as newer readings
-// appear" convention every other adapter's transcript reader uses, since
-// not every bubble carries a token count (most read 0/0; only the
-// composer's own periodic accounting bubbles have real numbers).
+// recent last-action reading, the most recent non-zero token count, and
+// the most recent model name — the same "keep whatever was last found,
+// overwrite as newer readings appear" convention every other adapter's
+// transcript reader uses, since not every bubble carries every field
+// (most token counts read 0/0; only the composer's own periodic
+// accounting bubbles have real numbers; modelInfo is rarer still).
 // ORDER BY rowid recovers chronological order after the GLOB search
 // (whose result order otherwise follows the key's — effectively random,
 // since a bubbleId's UUID suffix carries no chronological meaning).
@@ -194,6 +205,10 @@ func (s *composerStore) usageForComposer(composerID string) (composerUsage, bool
 		if b.TokenCount != nil && (b.TokenCount.InputTokens > 0 || b.TokenCount.OutputTokens > 0) {
 			u.TokensIn = b.TokenCount.InputTokens
 			u.TokensOut = b.TokenCount.OutputTokens
+			have = true
+		}
+		if b.ModelInfo != nil && b.ModelInfo.ModelName != "" {
+			u.Model = b.ModelInfo.ModelName
 			have = true
 		}
 	}

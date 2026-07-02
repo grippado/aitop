@@ -163,6 +163,10 @@ func TestEnrichWithComposer_SetsIDAndContextPctForCrossToolDedup(t *testing.T) {
 		{"composerId":"comp-shared","name":"Backoffice PR review 7881","lastUpdatedAt":5000,"contextUsagePercent":32.14,"workspaceIdentifier":{"uri":{"fsPath":"/Users/x/www/isaac"}}}
 	]}`)
 	if _, err := s.db.Exec(`INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)`,
+		"bubbleId:comp-shared:b0", `{"type":1,"modelInfo":{"modelName":"composer-2.5"}}`); err != nil {
+		t.Fatalf("insert bubble: %v", err)
+	}
+	if _, err := s.db.Exec(`INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)`,
 		"bubbleId:comp-shared:b1", `{"type":2,"toolFormerData":{"name":"ask_question"}}`); err != nil {
 		t.Fatalf("insert bubble: %v", err)
 	}
@@ -185,6 +189,9 @@ func TestEnrichWithComposer_SetsIDAndContextPctForCrossToolDedup(t *testing.T) {
 	}
 	if si.LastAction != "🔧 ask_question" {
 		t.Fatalf("LastAction = %q, want the bubble's tool call summary", si.LastAction)
+	}
+	if si.Model != "composer 2.5" {
+		t.Fatalf("Model = %q, want the friendly form of the sparse modelInfo bubble's modelName (%q)", si.Model, "composer 2.5")
 	}
 }
 

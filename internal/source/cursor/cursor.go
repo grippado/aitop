@@ -305,8 +305,8 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 	return out, nil
 }
 
-// enrichWithComposer fills ID/Title/CWD/LastAction/tokens/context% from
-// Cursor's own state.vscdb when a matching composer is found for
+// enrichWithComposer fills ID/Title/CWD/LastAction/tokens/context%/model
+// from Cursor's own state.vscdb when a matching composer is found for
 // workspaceLabel — the same per-session transcript enrichment every other
 // adapter's Sessions() does, just against a real SQLite store instead of
 // a JSONL transcript. CWD gets upgraded from the process-monitor log's
@@ -338,6 +338,7 @@ func (a *Adapter) enrichWithComposer(si *domain.SessionInfo, workspaceLabel stri
 		si.LastAction = usage.LastAction
 		si.TokensIn = usage.TokensIn
 		si.TokensOut = usage.TokensOut
+		si.Model = friendlyModelName(usage.Model)
 	}
 }
 

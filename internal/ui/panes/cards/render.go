@@ -193,14 +193,27 @@ func renderContextOrFallback(th theme.Theme, c Card, width int) string {
 	}
 }
 
-// renderContextLine draws "Context: [bar] USED/TOTAL (PCT%)". TOTAL isn't
-// stored on Card directly — it's derived from TokensIn/ContextPct
-// (TokensIn = TOTAL * ContextPct/100), which keeps this UI-layer function
-// ignorant of any specific model's window size instead of hardcoding one.
+// renderContextLine draws "Context: [bar] USED/TOTAL (PCT%)" when the
+// card has a real token count backing that ratio, or just "Context: [bar]
+// (PCT%)" when it doesn't. TOTAL isn't stored on Card directly — when
+// shown, it's derived from TokensIn/ContextPct (TokensIn = TOTAL *
+// ContextPct/100), which keeps this UI-layer function ignorant of any
+// specific model's window size instead of hardcoding one. That derivation
+// only holds when ContextPct was itself computed from TokensIn in the
+// first place (true for Claude/Codex/opencode) — Cursor's ContextPct
+// comes from its own independent reading (Cursor's own
+// contextUsagePercent field) with no guaranteed TokensIn to match, so
+// showing "0/0" there would be a fabricated ratio, not a real one; c.
+// HasTokens is what distinguishes the two cases.
 func renderContextLine(th theme.Theme, c Card, width int) string {
 	label := "Context: "
-	total := int64(float64(c.TokensIn) * 100 / c.ContextPct)
-	suffix := fmt.Sprintf(" %s/%s (%s)", formatTokens(c.TokensIn), formatTokens(total), widgets.PctLabel(c.ContextPct))
+	var suffix string
+	if c.HasTokens {
+		total := int64(float64(c.TokensIn) * 100 / c.ContextPct)
+		suffix = fmt.Sprintf(" %s/%s (%s)", formatTokens(c.TokensIn), formatTokens(total), widgets.PctLabel(c.ContextPct))
+	} else {
+		suffix = fmt.Sprintf(" (%s)", widgets.PctLabel(c.ContextPct))
+	}
 
 	barWidth := width - lipgloss.Width(label) - lipgloss.Width(suffix) - 2 // Bar()'s own "[" "]"
 	if barWidth < 6 {
