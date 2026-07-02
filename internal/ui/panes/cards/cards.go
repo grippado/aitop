@@ -5,16 +5,23 @@
 //
 // Known honesty gaps, inherited from what adapters currently populate (not
 // this package's decision to make, and not fixed here since the backend
-// is out of scope for this refactor): SessionInfo.Branch/Dirty/Model are
-// not set by any adapter yet, so the card's tertiary line and model pill
-// will often render "—" / a bare tool name on real data today. Tokens and
-// context% come straight from each session (SessionInfo.TokensIn/
-// TokensOut/ContextUsedPct) when the adapter has a per-session source —
-// Claude Code's own transcript today. Cost/rate-limits have no
-// per-session source and stay tool-wide (every session's card shows the
-// same cost/limit reading for that tool) — process-count/CPU-sum is
-// attributed to one "representative" session per tool (the alive one
-// with the most recent activity) so it isn't double-counted across cards.
+// is out of scope for this refactor): SessionInfo.Branch/Dirty are not set
+// by any adapter yet, so the card's footer context-line falls back to "—"
+// on real data today (Model, unlike those two, IS populated by most
+// adapters now). Tokens and context% come straight from each session
+// (SessionInfo.TokensIn/TokensOut/ContextUsedPct) when the adapter has a
+// per-session source. Cost/rate-limits have no per-session source and
+// stay tool-wide (every session's card shows the same cost/limit reading
+// for that tool) — process-count/CPU-sum is attributed to one
+// "representative" session per tool (the alive one with the most recent
+// activity) so it isn't double-counted across cards.
+//
+// One cross-tool concern lives here too: a cursor-agent CLI run and its
+// mirror inside Cursor IDE's own composer store share the same session ID
+// (confirmed — see internal/source/cursor's enrichWithComposer), so
+// BuildCards drops the "cursor" (IDE) card for any session ID a
+// cursor-agent session already claims, rather than showing the identical
+// real task twice.
 package cards
 
 import (
@@ -127,6 +134,13 @@ func BuildCards(snap domain.Snapshot, toolFilter string) []Card {
 		leftoverCPU[p.Tool] += p.CPUPct
 	}
 
+	cursorAgentIDs := map[string]bool{}
+	for _, s := range snap.Sessions {
+		if s.Tool == "cursor-agent" && s.ID != "" {
+			cursorAgentIDs[s.ID] = true
+		}
+	}
+
 	now := time.Now()
 	var out []Card
 	for _, s := range snap.Sessions {
@@ -139,6 +153,18 @@ func BuildCards(snap domain.Snapshot, toolFilter string) []Card {
 			// not a running agent — it doesn't get a card. See
 			// isBetterRepresentative/leftover attribution below, which
 			// already prefer alive sessions for the same reason.
+			continue
+		}
+		if s.Tool == "cursor" && s.ID != "" && cursorAgentIDs[s.ID] {
+			// The exact same real task, observed twice: cursor-agent CLI
+			// runs share their composerId with Cursor IDE's own composer
+			// store (confirmed — a cursor-agent transcript file is
+			// literally named after the same composerId), so without this
+			// the identical task gets two cards. cursor-agent wins: its
+			// own transcript is the more precise per-session source (real
+			// tokens, more granular last action) than the composer-store
+			// enrichment the cursor (IDE) adapter falls back to for the
+			// same underlying data.
 			continue
 		}
 		c := Card{

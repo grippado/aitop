@@ -1,8 +1,10 @@
 package cursoragent
 
 import (
+	"context"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -240,5 +242,84 @@ func TestTranscriptTracker_SkipsUserQueryTextAsLastAction(t *testing.T) {
 	}
 	if usage.LastAction != "" {
 		t.Fatalf("LastAction should stay empty for a raw user_query text block, got %q", usage.LastAction)
+	}
+}
+
+func TestSlugifyCWD(t *testing.T) {
+	cases := []struct{ cwd, want string }{
+		{"/Users/grippado", "Users-grippado"},
+		{"/Users/grippado/www/isaac", "Users-grippado-www-isaac"},
+		{"/Users/grippado/.notes", "Users-grippado-.notes"},
+	}
+	for _, c := range cases {
+		if got := slugifyCWD(c.cwd); got != c.want {
+			t.Errorf("slugifyCWD(%q) = %q, want %q", c.cwd, got, c.want)
+		}
+	}
+}
+
+func TestFindLatestTranscriptInWorkspace_OnlySearchesThatWorkspace(t *testing.T) {
+	home := "/home/test"
+	// A different, unrelated workspace with a MORE recently written
+	// transcript — this must be ignored: findLatestTranscriptInWorkspace
+	// is exactly the fix for the real bug where a global "most recent
+	// anywhere" search attributed a different project's activity (or
+	// Cursor IDE's own Agent panel) to this card.
+	unrelated := filepath.Join(home, ".cursor", "projects", "Users-x-other-project", "agent-transcripts", "id-other", "id-other.jsonl")
+	wanted := filepath.Join(home, ".cursor", "projects", "Users-x-www-isaac", "agent-transcripts", "id-mine", "id-mine.jsonl")
+
+	f := &fakeReader{
+		dirs: map[string][]string{
+			filepath.Join(home, ".cursor", "projects", "Users-x-other-project", "agent-transcripts"):             {"id-other"},
+			filepath.Join(home, ".cursor", "projects", "Users-x-other-project", "agent-transcripts", "id-other"): {"id-other.jsonl"},
+			filepath.Join(home, ".cursor", "projects", "Users-x-www-isaac", "agent-transcripts"):                 {"id-mine"},
+			filepath.Join(home, ".cursor", "projects", "Users-x-www-isaac", "agent-transcripts", "id-mine"):      {"id-mine.jsonl"},
+		},
+		files: map[string][]byte{
+			unrelated: []byte(`{}`),
+			wanted:    []byte(`{}`),
+		},
+		mtime: map[string]time.Time{
+			unrelated: time.Unix(9999, 0), // much newer, but wrong workspace
+			wanted:    time.Unix(1000, 0),
+		},
+	}
+	withFakeReader(t, f)
+
+	path, sessionID := findLatestTranscriptInWorkspace(home, "/Users/x/www/isaac")
+	if path != wanted {
+		t.Fatalf("path = %q, want the scoped workspace's own transcript %q (not the unrelated, newer one)", path, wanted)
+	}
+	if sessionID != "id-mine" {
+		t.Fatalf("sessionID = %q, want %q", sessionID, "id-mine")
+	}
+}
+
+func TestFindLatestTranscriptInWorkspace_NoWorkspaceDirReturnsEmpty(t *testing.T) {
+	withFakeReader(t, &fakeReader{})
+	path, sessionID := findLatestTranscriptInWorkspace("/home/test", "/Users/x/never-opened")
+	if path != "" || sessionID != "" {
+		t.Fatalf("expected empty results for a workspace with no agent-transcripts dir, got path=%q sessionID=%q", path, sessionID)
+	}
+}
+
+func TestProcessCwd_MatchesRealProcessCwd(t *testing.T) {
+	lsofPath, err := exec.LookPath("lsof")
+	if err != nil {
+		t.Skip("lsof not on PATH — skipping (processCwd degrades gracefully in production too)")
+	}
+	_ = lsofPath
+
+	wantCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+
+	gotCwd, ok := processCwd(context.Background(), os.Getpid())
+	if !ok {
+		t.Fatalf("expected processCwd to resolve this test process's own cwd via real lsof")
+	}
+	if gotCwd != wantCwd {
+		t.Fatalf("processCwd = %q, want %q", gotCwd, wantCwd)
 	}
 }

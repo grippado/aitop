@@ -27,12 +27,16 @@ func composerDBPath(home string) string {
 
 // composerHeader mirrors one entry of composer.composerHeaders' JSON
 // allComposers array — confirmed shape on this machine's real data.
+// ContextUsagePercent is Cursor's OWN computed reading (confirmed present
+// on real composers, e.g. 27.96) — authoritative, not derived from a
+// guessed context-window size the way Claude Code's adapter has to.
 type composerHeader struct {
-	ComposerID          string `json:"composerId"`
-	Name                string `json:"name"`
-	LastUpdatedAt       int64  `json:"lastUpdatedAt"`
-	IsArchived          bool   `json:"isArchived"`
-	IsDraft             bool   `json:"isDraft"`
+	ComposerID          string  `json:"composerId"`
+	Name                string  `json:"name"`
+	LastUpdatedAt       int64   `json:"lastUpdatedAt"`
+	IsArchived          bool    `json:"isArchived"`
+	IsDraft             bool    `json:"isDraft"`
+	ContextUsagePercent float64 `json:"contextUsagePercent"`
 	WorkspaceIdentifier struct {
 		URI *struct {
 			FsPath string `json:"fsPath"`

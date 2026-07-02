@@ -305,21 +305,34 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 	return out, nil
 }
 
-// enrichWithComposer fills Title/CWD/LastAction/tokens from Cursor's own
-// state.vscdb when a matching composer is found for workspaceLabel — the
-// same per-session transcript enrichment every other adapter's Sessions()
-// does, just against a real SQLite store instead of a JSONL transcript.
-// CWD gets upgraded from the process-monitor log's bare folder name to
-// the composer's real full filesystem path when a match is found — a
-// strictly more precise reading of the same fact, not a different one.
+// enrichWithComposer fills ID/Title/CWD/LastAction/tokens/context% from
+// Cursor's own state.vscdb when a matching composer is found for
+// workspaceLabel — the same per-session transcript enrichment every other
+// adapter's Sessions() does, just against a real SQLite store instead of
+// a JSONL transcript. CWD gets upgraded from the process-monitor log's
+// bare folder name to the composer's real full filesystem path when a
+// match is found — a strictly more precise reading of the same fact, not
+// a different one.
+//
+// si.ID becomes the composer's own ComposerID — this matters beyond
+// display: confirmed on this machine, a cursor-agent CLI run shares its
+// composerId with Cursor IDE's own composer store (the CLI's transcript
+// file is literally named after it) when the same real task shows up in
+// both places. Setting ID here is what lets cards.BuildCards recognize
+// "this IDE session and that cursor-agent session are the same real task"
+// and dedup the redundant card instead of showing two.
 func (a *Adapter) enrichWithComposer(si *domain.SessionInfo, workspaceLabel string) {
 	c, ok := a.composer.bestComposerForWorkspace(workspaceLabel)
 	if !ok {
 		return
 	}
+	si.ID = c.ComposerID
 	si.Title = c.Name
 	if c.WorkspaceIdentifier.URI != nil && c.WorkspaceIdentifier.URI.FsPath != "" {
 		si.CWD = c.WorkspaceIdentifier.URI.FsPath
+	}
+	if c.ContextUsagePercent > 0 && c.ContextUsagePercent <= 100 {
+		si.ContextUsedPct = c.ContextUsagePercent
 	}
 	if usage, ok := a.composer.usageForComposer(c.ComposerID); ok {
 		si.LastAction = usage.LastAction

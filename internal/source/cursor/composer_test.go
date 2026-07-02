@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/grippado/aitop/internal/domain"
 )
 
 // openTestComposerDB creates a fresh temp SQLite file with the minimal
@@ -152,5 +154,51 @@ func TestSummarizeBubble(t *testing.T) {
 		if got := summarizeBubble(c.b); got != c.want {
 			t.Errorf("%s: summarizeBubble() = %q, want %q", c.name, got, c.want)
 		}
+	}
+}
+
+func TestEnrichWithComposer_SetsIDAndContextPctForCrossToolDedup(t *testing.T) {
+	s := openTestComposerDB(t)
+	setComposerHeaders(t, s, `{"allComposers":[
+		{"composerId":"comp-shared","name":"Backoffice PR review 7881","lastUpdatedAt":5000,"contextUsagePercent":32.14,"workspaceIdentifier":{"uri":{"fsPath":"/Users/x/www/isaac"}}}
+	]}`)
+	if _, err := s.db.Exec(`INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)`,
+		"bubbleId:comp-shared:b1", `{"type":2,"toolFormerData":{"name":"ask_question"}}`); err != nil {
+		t.Fatalf("insert bubble: %v", err)
+	}
+
+	a := &Adapter{composer: s}
+	si := domain.SessionInfo{Tool: Name, ID: "process-monitor-session-id", Alive: true, Status: "busy"}
+	a.enrichWithComposer(&si, "isaac")
+
+	if si.ID != "comp-shared" {
+		t.Fatalf("ID = %q, want the composer's own ComposerID %q (this is what cards.BuildCards dedups on against a matching cursor-agent session)", si.ID, "comp-shared")
+	}
+	if si.Title != "Backoffice PR review 7881" {
+		t.Fatalf("Title = %q, want the composer's real name", si.Title)
+	}
+	if si.CWD != "/Users/x/www/isaac" {
+		t.Fatalf("CWD = %q, want the composer's real fsPath (upgraded from the bare folder-name guess)", si.CWD)
+	}
+	if si.ContextUsedPct != 32.14 {
+		t.Fatalf("ContextUsedPct = %v, want Cursor's own reading 32.14", si.ContextUsedPct)
+	}
+	if si.LastAction != "🔧 ask_question" {
+		t.Fatalf("LastAction = %q, want the bubble's tool call summary", si.LastAction)
+	}
+}
+
+func TestEnrichWithComposer_OutOfRangeContextPctIsIgnored(t *testing.T) {
+	s := openTestComposerDB(t)
+	setComposerHeaders(t, s, `{"allComposers":[
+		{"composerId":"comp1","name":"X","lastUpdatedAt":1000,"contextUsagePercent":150,"workspaceIdentifier":{"uri":{"fsPath":"/Users/x/proj"}}}
+	]}`)
+
+	a := &Adapter{composer: s}
+	si := domain.SessionInfo{Tool: Name, Alive: true, Status: "busy"}
+	a.enrichWithComposer(&si, "proj")
+
+	if si.ContextUsedPct != 0 {
+		t.Fatalf("expected an out-of-range (>100) reading to be ignored rather than shown, got %v", si.ContextUsedPct)
 	}
 }
