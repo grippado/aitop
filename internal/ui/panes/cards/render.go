@@ -78,11 +78,20 @@ func RenderCard(th theme.Theme, c Card, width int, selected bool, expanded bool)
 		bodyWidth = 10
 	}
 
-	gutter := renderGutter(th, c)
-	body := renderBody(th, c, bodyWidth)
+	// Last action gets 2 lines by default, 4 when the card is expanded
+	// ('u') — everything else (dominant + tertiary) stays 1 line each, so
+	// the card's total body height is 1 + actionLines + 1.
+	actionLines := 2
+	if expanded {
+		actionLines = 4
+	}
+	totalLines := 1 + actionLines + 1
 
-	gutterLines := padLines(gutter, 3)
-	bodyLines := padLines(body, 3)
+	gutter := renderGutter(th, c)
+	body := renderBody(th, c, bodyWidth, actionLines)
+
+	gutterLines := padLines(gutter, totalLines)
+	bodyLines := padLines(body, totalLines)
 
 	var mid []string
 	divider := lipgloss.NewStyle().Foreground(th.Border).Render("│")
@@ -126,7 +135,7 @@ func renderGutter(th theme.Theme, c Card) []string {
 	}
 }
 
-func renderBody(th theme.Theme, c Card, width int) []string {
+func renderBody(th theme.Theme, c Card, width int, actionLines int) []string {
 	badge, badgeColor := stateBadge(c)
 	badgeStyled := lipgloss.NewStyle().Foreground(badgeColor).Render(badge)
 
@@ -158,12 +167,19 @@ func renderBody(th theme.Theme, c Card, width int) []string {
 	}
 
 	// Secondary: last session action, read from the session's own
-	// transcript when the adapter supports it (Claude Code today). "—"
-	// when the adapter has no such source (Codex, Cursor) — never
-	// fabricated.
-	secondary := widgets.Dash
+	// transcript when the adapter supports it (Claude Code today) —
+	// word-wrapped across actionLines lines (2 by default, 4 when
+	// expanded), never a fabricated activity string. "—" when the
+	// adapter has no such source (Codex, Cursor).
+	var secondary []string
 	if c.LastAction != "" {
-		secondary = c.LastAction
+		secondary = widgets.Wrap(c.LastAction, width, actionLines)
+	}
+	if len(secondary) == 0 {
+		secondary = []string{widgets.Dash}
+	}
+	for len(secondary) < actionLines {
+		secondary = append(secondary, "")
 	}
 
 	// Tertiary: whatever the ~{PWD} footer pill doesn't already cover —
@@ -177,7 +193,10 @@ func renderBody(th theme.Theme, c Card, width int) []string {
 		tertiary = c.Branch + dirty
 	}
 
-	return []string{dominant, secondary, tertiary}
+	lines := []string{dominant}
+	lines = append(lines, secondary...)
+	lines = append(lines, tertiary)
+	return lines
 }
 
 func stateBadge(c Card) (string, lipgloss.Color) {

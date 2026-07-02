@@ -56,8 +56,8 @@ type Card struct {
 	Branch     string
 	Dirty      bool
 	Model      string
-	Title      string // e.g. Claude Code's own auto-generated session title
-	LastAction string // e.g. "🔧 Bash: go test ./..." — "" when unavailable
+	Title      string  // e.g. Claude Code's own auto-generated session title
+	LastAction string  // e.g. "🔧 Bash: go test ./..." — "" when unavailable
 	AgeSec     float64 // seconds since last activity
 
 	HasContext bool

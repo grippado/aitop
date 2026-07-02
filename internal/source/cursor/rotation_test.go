@@ -24,9 +24,9 @@ func (f fakeFileInfo) Sys() interface{}   { return nil }
 type fakeDirEntry struct{ info fakeFileInfo }
 
 func (e fakeDirEntry) Name() string               { return e.info.name }
-func (e fakeDirEntry) IsDir() bool                 { return false }
-func (e fakeDirEntry) Type() fs.FileMode           { return 0 }
-func (e fakeDirEntry) Info() (fs.FileInfo, error)  { return e.info, nil }
+func (e fakeDirEntry) IsDir() bool                { return false }
+func (e fakeDirEntry) Type() fs.FileMode          { return 0 }
+func (e fakeDirEntry) Info() (fs.FileInfo, error) { return e.info, nil }
 
 // mockFSReader simulates exactly one active log file whose content and
 // name can be swapped mid-test to simulate append, shrink/truncate, and

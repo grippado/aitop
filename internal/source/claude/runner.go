@@ -19,7 +19,7 @@ type Reader interface {
 
 type osReader struct{}
 
-func (osReader) ReadFile(path string) ([]byte, error)      { return os.ReadFile(path) }
+func (osReader) ReadFile(path string) ([]byte, error)       { return os.ReadFile(path) }
 func (osReader) ReadDir(path string) ([]os.DirEntry, error) { return os.ReadDir(path) }
 func (osReader) Stat(path string) (os.FileInfo, error)      { return os.Stat(path) }
 

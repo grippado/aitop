@@ -41,11 +41,11 @@ type sample struct {
 }
 
 type sampleRow struct {
-	PID                  int     `json:"pid"`
-	PPID                 int     `json:"ppid"`
-	ProcessName          string  `json:"processName"`
-	SampleAvgMemMb       float64 `json:"sampleAvgMemMb"`
-	CPUDuringSamplePeak  float64 `json:"cpuDuringSamplePeakPct"`
+	PID                 int     `json:"pid"`
+	PPID                int     `json:"ppid"`
+	ProcessName         string  `json:"processName"`
+	SampleAvgMemMb      float64 `json:"sampleAvgMemMb"`
+	CPUDuringSamplePeak float64 `json:"cpuDuringSamplePeakPct"`
 }
 
 type Adapter struct {

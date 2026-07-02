@@ -86,11 +86,14 @@ type transcriptLine struct {
 	} `json:"message"`
 }
 
-// summarizeLastAction condenses the LAST content block of a turn into one
-// display line — mirrors mutirao's tool_use/text handling, minus the
+// summarizeLastAction condenses the LAST content block of a turn into a
+// short description — mirrors mutirao's tool_use/text handling, minus the
 // live multi-line stream (aitop polls a snapshot, it doesn't tail a
 // pane). Returns "" for block types with nothing worth summarizing
-// (e.g. empty text, or a type this adapter doesn't recognize).
+// (e.g. empty text, or a type this adapter doesn't recognize). Text is
+// only lightly clamped here (200 runes) — actual line-wrapping to fit the
+// card is the UI layer's job (internal/ui/panes/cards), which knows the
+// real available width and line budget.
 func summarizeLastAction(blocks []contentBlock) string {
 	if len(blocks) == 0 {
 		return ""
@@ -106,13 +109,13 @@ func summarizeLastAction(blocks []contentBlock) string {
 		if detail == "" {
 			return "🔧 " + name
 		}
-		return "🔧 " + name + ": " + clampText(detail, 50)
+		return "🔧 " + name + ": " + clampText(detail, 200)
 	case "text":
 		txt := strings.TrimSpace(b.Text)
 		if txt == "" {
 			return ""
 		}
-		return "💭 " + clampText(txt, 60)
+		return "💭 " + clampText(txt, 200)
 	default:
 		return ""
 	}

@@ -27,11 +27,11 @@ import (
 
 func main() {
 	var (
-		once      = flag.Bool("once", false, "print a single snapshot and exit, instead of the live TUI")
-		asJSON    = flag.Bool("json", false, "with --once, print the snapshot as JSON instead of a text summary")
-		demoMode  = flag.Bool("demo", false, "use synthetic data instead of reading real tool state (for screenshots/GIFs/dev)")
-		refresh   = flag.Duration("refresh", 2*time.Second, "process/CPU sample interval")
-		showVer   = flag.Bool("version", false, "print version and exit")
+		once     = flag.Bool("once", false, "print a single snapshot and exit, instead of the live TUI")
+		asJSON   = flag.Bool("json", false, "with --once, print the snapshot as JSON instead of a text summary")
+		demoMode = flag.Bool("demo", false, "use synthetic data instead of reading real tool state (for screenshots/GIFs/dev)")
+		refresh  = flag.Duration("refresh", 2*time.Second, "process/CPU sample interval")
+		showVer  = flag.Bool("version", false, "print version and exit")
 	)
 	flag.Parse()
 

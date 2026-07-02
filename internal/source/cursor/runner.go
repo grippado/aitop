@@ -17,7 +17,7 @@ type Reader interface {
 type osReader struct{}
 
 func (osReader) ReadDir(dir string) ([]os.DirEntry, error) { return os.ReadDir(dir) }
-func (osReader) Stat(path string) (os.FileInfo, error)      { return os.Stat(path) }
+func (osReader) Stat(path string) (os.FileInfo, error)     { return os.Stat(path) }
 
 func (osReader) ReadFrom(path string, offset int64) ([]byte, int64, error) {
 	f, err := os.Open(path)

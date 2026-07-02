@@ -21,7 +21,7 @@ func (f fakeFileInfo) Sys() interface{}   { return nil }
 
 type fakeDirEntry struct{ info fakeFileInfo }
 
-func (e fakeDirEntry) Name() string              { return e.info.name }
+func (e fakeDirEntry) Name() string               { return e.info.name }
 func (e fakeDirEntry) IsDir() bool                { return e.info.isDir }
 func (e fakeDirEntry) Type() fs.FileMode          { return 0 }
 func (e fakeDirEntry) Info() (fs.FileInfo, error) { return e.info, nil }
@@ -59,9 +59,9 @@ func TestFindSessionCWD_ScansYearMonthDayAndReadsOnlyMatch(t *testing.T) {
 
 	fr := &fakeCWDReader{
 		dirs: map[string][]fakeDirEntry{
-			"/cfg/sessions":          {{fakeFileInfo{name: "2026", isDir: true}}},
-			"/cfg/sessions/2026":     {{fakeFileInfo{name: "06", isDir: true}}},
-			"/cfg/sessions/2026/06":  {{fakeFileInfo{name: "23", isDir: true}}},
+			"/cfg/sessions":            {{fakeFileInfo{name: "2026", isDir: true}}},
+			"/cfg/sessions/2026":       {{fakeFileInfo{name: "06", isDir: true}}},
+			"/cfg/sessions/2026/06":    {{fakeFileInfo{name: "23", isDir: true}}},
 			"/cfg/sessions/2026/06/23": {{fakeFileInfo{name: rolloutName}}},
 		},
 		files: map[string][]byte{
