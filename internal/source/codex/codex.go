@@ -42,14 +42,15 @@ func isCodexProcess(name, cmdline string) bool {
 }
 
 type Adapter struct {
-	home  string
-	procs *procstat.Cache
-	cwd   *cwdResolver
+	home       string
+	procs      *procstat.Cache
+	cwd        *cwdResolver
+	transcript *codexTranscriptTracker
 }
 
 func New() *Adapter {
 	home, _ := os.UserHomeDir()
-	return &Adapter{home: home, procs: procstat.NewCache(), cwd: newCWDResolver()}
+	return &Adapter{home: home, procs: procstat.NewCache(), cwd: newCWDResolver(), transcript: newCodexTranscriptTracker()}
 }
 
 func (a *Adapter) Name() string { return Name }
@@ -95,8 +96,23 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 
 	livePID, live := a.findLiveCodexPID(ctx)
 
+	// Correlating a live process to a session by PID never actually works
+	// on this machine: chat_processes.json (the only source of PID->
+	// session mapping) is absent, so byPID is always empty and si.PID
+	// stays 0 for every history-derived session. Resolving the live
+	// process's own session ID directly (from the most recently written
+	// rollout file's name) and matching on ID instead is what actually
+	// works — and avoids a real duplication bug this replaced: matching
+	// on PID alone meant a live session already present in history.jsonl
+	// got a SECOND card from the orphan-fallback path below, both with
+	// the same session ID.
+	liveSessionID := ""
+	if live {
+		liveSessionID, _ = findLatestRolloutSessionID(filepath.Join(a.home, ".codex"))
+	}
+
 	var out []domain.SessionInfo
-	usedLivePID := false
+	usedLiveID := false
 	for id, e := range latestBySession {
 		si := domain.SessionInfo{
 			Tool:      Name,
@@ -118,21 +134,55 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 			// every tick.
 			si.CWD = a.cwd.resolve(filepath.Join(a.home, ".codex"), id)
 		}
-		if live && si.PID == livePID {
+		if live && id == liveSessionID {
+			si.PID = livePID
 			si.Alive = true
 			si.Status = "busy"
-			usedLivePID = true
+			usedLiveID = true
 		}
+		a.enrichWithTranscript(&si)
 		out = append(out, si)
 	}
 
-	// A live Codex process we couldn't correlate to any known session
-	// still gets surfaced, honestly labeled, rather than hidden.
-	if live && !usedLivePID {
-		out = append(out, domain.SessionInfo{Tool: Name, ID: "", PID: livePID, Alive: true, Status: "busy"})
+	// A live process whose session isn't in history.jsonl yet (started
+	// moments ago) still gets surfaced as its own card, honestly labeled,
+	// rather than hidden or duplicated.
+	if live && !usedLiveID {
+		si := domain.SessionInfo{Tool: Name, ID: liveSessionID, PID: livePID, Alive: true, Status: "busy"}
+		if si.CWD == "" && liveSessionID != "" {
+			si.CWD = a.cwd.resolve(filepath.Join(a.home, ".codex"), liveSessionID)
+		}
+		a.enrichWithTranscript(&si)
+		out = append(out, si)
 	}
 
 	return out, nil
+}
+
+// enrichWithTranscript fills TokensIn/TokensOut/ContextUsedPct/LastAction
+// from the session's own rollout file, when it has an ID to resolve one
+// by. Mirrors the Claude adapter's per-session transcript enrichment —
+// same architectural fix for the same class of bug (tool-wide numbers
+// applied identically to every card of a tool).
+func (a *Adapter) enrichWithTranscript(si *domain.SessionInfo) {
+	if si.ID == "" {
+		return
+	}
+	usage, ok := a.transcript.usageFor(filepath.Join(a.home, ".codex"), si.ID)
+	if !ok {
+		return
+	}
+	si.TokensIn = usage.TokensIn
+	si.TokensOut = usage.TokensOut
+	if usage.HasContext {
+		si.ContextUsedPct = usage.ContextUsedPct
+	}
+	if usage.LastAction != "" {
+		si.LastAction = usage.LastAction
+	}
+	if usage.Title != "" {
+		si.Title = usage.Title
+	}
 }
 
 func (a *Adapter) readHistory() []historyEntry {

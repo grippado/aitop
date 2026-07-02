@@ -49,6 +49,17 @@ func (f *fakeCWDReader) ReadDir(path string) ([]os.DirEntry, error) {
 	return out, nil
 }
 func (f *fakeCWDReader) Stat(path string) (os.FileInfo, error) { return nil, os.ErrNotExist }
+func (f *fakeCWDReader) ReadFrom(path string, offset int64) ([]byte, int64, error) {
+	b, ok := f.files[path]
+	if !ok {
+		return nil, 0, os.ErrNotExist
+	}
+	size := int64(len(b))
+	if offset > size {
+		offset = 0
+	}
+	return b[offset:], size, nil
+}
 
 func TestFindSessionCWD_ScansYearMonthDayAndReadsOnlyMatch(t *testing.T) {
 	orig := reader

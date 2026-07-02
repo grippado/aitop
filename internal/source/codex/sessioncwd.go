@@ -56,6 +56,18 @@ func (r *cwdResolver) resolve(configDir, sessionID string) string {
 // root — see runner.go) looking for a filename containing sessionID, then
 // reads only that one file's first line for its cwd.
 func findSessionCWD(configDir, sessionID string) string {
+	path := findSessionRolloutPath(configDir, sessionID)
+	if path == "" {
+		return ""
+	}
+	return readFirstLineCWD(path)
+}
+
+// findSessionRolloutPath is the shared directory-cascade lookup behind
+// findSessionCWD (reads just the first line) and the full tail-follow
+// transcript reader in usage.go (reads the whole growing file) — both
+// need the same rollout-*.jsonl path for a given session ID.
+func findSessionRolloutPath(configDir, sessionID string) string {
 	sessionsRoot := filepath.Join(configDir, "sessions")
 	years, err := reader.ReadDir(sessionsRoot)
 	if err != nil {
@@ -89,10 +101,9 @@ func findSessionCWD(configDir, sessionID string) string {
 					continue
 				}
 				for _, f := range files {
-					if !strings.Contains(f.Name(), sessionID) {
-						continue
+					if strings.Contains(f.Name(), sessionID) {
+						return filepath.Join(dayDir, f.Name())
 					}
-					return readFirstLineCWD(filepath.Join(dayDir, f.Name()))
 				}
 			}
 		}
@@ -123,4 +134,68 @@ func indexByte(b []byte, c byte) int {
 		}
 	}
 	return -1
+}
+
+// rolloutUUIDLen is the fixed length of a UUID (8-4-4-4-12 hex, with
+// dashes): 36 characters, regardless of the timestamp prefix in a
+// rollout filename.
+const rolloutUUIDLen = 36
+
+// findLatestRolloutSessionID finds the most recently written rollout file
+// across the whole sessions/ tree and extracts its session ID from the
+// filename itself (rollout-<timestamp>-<uuid>.jsonl — the UUID is always
+// the last 36 characters before ".jsonl"). Year/month/day directory names
+// and the filename's embedded timestamp are all zero-padded/ISO-like, so
+// picking the lexicographically last entry at each level is equivalent to
+// picking the chronologically latest one.
+//
+// Used when a live Codex process can't be correlated to any session via
+// history.jsonl/chat_processes.json (e.g. a session started moments ago,
+// before history.jsonl caught up) — the alternative is leaving that
+// session permanently unidentified, which blocks every transcript-based
+// reading (tokens, context%, last action all key off session ID).
+func findLatestRolloutSessionID(configDir string) (string, bool) {
+	sessionsRoot := filepath.Join(configDir, "sessions")
+	year, ok := latestDirEntry(sessionsRoot)
+	if !ok {
+		return "", false
+	}
+	yearDir := filepath.Join(sessionsRoot, year)
+	month, ok := latestDirEntry(yearDir)
+	if !ok {
+		return "", false
+	}
+	monthDir := filepath.Join(yearDir, month)
+	day, ok := latestDirEntry(monthDir)
+	if !ok {
+		return "", false
+	}
+	dayDir := filepath.Join(monthDir, day)
+	file, ok := latestDirEntry(dayDir)
+	if !ok {
+		return "", false
+	}
+
+	name := strings.TrimSuffix(file, ".jsonl")
+	if len(name) < rolloutUUIDLen {
+		return "", false
+	}
+	return name[len(name)-rolloutUUIDLen:], true
+}
+
+// latestDirEntry returns the lexicographically last entry name in dir
+// (works for both subdirectories and files — every level of the
+// sessions/ tree only ever contains one kind).
+func latestDirEntry(dir string) (string, bool) {
+	entries, err := reader.ReadDir(dir)
+	if err != nil {
+		return "", false
+	}
+	best := ""
+	for _, e := range entries {
+		if e.Name() > best {
+			best = e.Name()
+		}
+	}
+	return best, best != ""
 }
