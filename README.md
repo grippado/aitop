@@ -58,7 +58,7 @@ Every existing "aitop"-named project (and the excellent but tmux-bound `agent-da
 |------|---|---|---|---|---|---|
 | Claude Code | ✅ | ✅ | ✅ (own auto-title + transcript) | ✅ (own transcript) | ✅ (per-session, own transcript) | ✅ (5h/7d, via `ccstatusline`'s cache) |
 | Codex CLI | ✅ | ✅ | ✅ (synthesized from first request + transcript) | ✅ (own rollout's turn_context) | ✅ (per-session; Codex's own rollout gives the true model context window, no guessing) | Not available (no local rate-limit source) |
-| Cursor (IDE) | ✅ (Cursor's own telemetry) | ✅ | Not available | Not available | Not available | Not available (proprietary/cloud-side) |
+| Cursor (IDE) | ✅ (Cursor's own telemetry) | ✅ | ✅ (real title + last message/tool call, from Cursor's own `state.vscdb`) | Not available | Tokens: ✅ (per-composer, same source) · Context%: not available (no window-size reading found) | Not available (proprietary/cloud-side) |
 | cursor-agent (CLI) | ✅ | ✅ | ✅ (first request + own transcript) | ✅ (currently selected model, from cursor-agent's own config) | Not available (no per-turn usage in its transcript format) | Not available |
 | opencode | ✅ | ✅ | ✅ (opencode's own session title) | ✅ (own models catalog cache gives the real display name) | ✅ (per-session, straight from opencode's own SQLite state; real context window from its models catalog) | Not available (its own cost figure is lifetime-cumulative, not day/month-scoped — see the adapter's own doc comment) |
 | Other AI CLIs (aider, windsurf, ...) | Best-effort via process-name match | — | — | — | — | — |

@@ -52,7 +52,8 @@ func RenderGrid(th theme.Theme, cs []Card, selected int, width int) string {
 // RenderCard draws one card in three vertically stacked zones, each
 // directly abutting the next full-width rule with no blank-line padding
 // (tried once with breathing room around the rules, but tighter reads
-// cleaner): a header (the title, if any), a body (a narrow token gutter, a
+// cleaner): a header (always a title — the real one, or a computed
+// fallback, see renderTitle), a body (a narrow token gutter, a
 // vertical divider, and the dominant state badge + last-action text), and
 // a footer (the tool/model/cwd pill, the context-window reading, and the
 // 5h/7d usage detail) — there is no collapsed mode, every card always
@@ -106,9 +107,7 @@ func RenderCard(th theme.Theme, c Card, width int, selected bool) string {
 	rule := lipgloss.NewStyle().Foreground(th.Border).Render(strings.Repeat("─", textWidth))
 
 	var lines []string
-	if title := renderTitle(th, c, textWidth); title != "" {
-		lines = append(lines, title)
-	}
+	lines = append(lines, renderTitle(th, c, textWidth))
 	lines = append(lines, rule)
 	lines = append(lines, mid...)
 	lines = append(lines, rule)
@@ -227,14 +226,47 @@ func stateBadge(c Card) (string, lipgloss.Color) {
 // renderTitle draws the card's header line — a short descriptive label
 // for what the session is working on (e.g. Claude Code's own
 // auto-generated session title), the analog of mutirao's per-mão task
-// title. Returns "" when the adapter has no such source (Codex, Cursor
-// today), in which case RenderCard omits the line entirely rather than
-// leaving a blank header.
+// title. Every card gets a header line, always: a blank gap up top read
+// as a rendering bug in practice (confirmed against real feedback: a live
+// Claude Code session with no ai-title yet just looked broken, not
+// "honestly missing data" the way a "—" elsewhere in the card does).
+// Real titles render bold/accented; a computed fallbackTitle renders
+// plain/muted instead, so it's visually obvious which one a card has —
+// still true information (derived from the session's own CWD), never a
+// fabricated summary standing in for the real thing.
 func renderTitle(th theme.Theme, c Card, width int) string {
-	if c.Title == "" {
+	if c.Title != "" {
+		return lipgloss.NewStyle().Bold(true).Foreground(th.Accent).Render(widgets.TruncateRight(c.Title, width))
+	}
+	return lipgloss.NewStyle().Foreground(th.Muted).Render(widgets.TruncateRight(fallbackTitle(c), width))
+}
+
+// fallbackTitle computes a placeholder header for a session whose adapter
+// has no real title (Codex before its first genuine user message, Cursor
+// IDE with no transcript source at all today). Prefers the project
+// directory name — the most useful "what is this session actually on"
+// signal short of a real title — falling back further to a bare
+// "<tool> session" when even CWD is unavailable, so this never returns "".
+func fallbackTitle(c Card) string {
+	if proj := lastPathSegment(c.CWD); proj != "" {
+		return proj
+	}
+	return friendlyTool(c.Tool) + " session"
+}
+
+// lastPathSegment returns the final component of a filesystem path, e.g.
+// "/Users/demo/www/isaac/backoffice" -> "backoffice". "" for an empty
+// path or one that's only slashes.
+func lastPathSegment(path string) string {
+	path = strings.TrimRight(path, "/")
+	if path == "" {
 		return ""
 	}
-	return lipgloss.NewStyle().Bold(true).Foreground(th.Accent).Render(widgets.TruncateRight(c.Title, width))
+	i := strings.LastIndexByte(path, '/')
+	if i < 0 {
+		return path
+	}
+	return path[i+1:]
 }
 
 // renderPills builds the card's footer line — left pill for tool identity,

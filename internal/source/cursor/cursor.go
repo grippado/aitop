@@ -56,6 +56,13 @@ type Adapter struct {
 	// which is more accurate than gopsutil sampling for this tool.
 	starts *procstat.Cache
 
+	// composer reads Cursor's own state.vscdb for real title/last-action/
+	// token data — see composer.go. The process-monitor log this file
+	// reads gives liveness/CPU/mem/a bare workspace folder name; composer
+	// fills in everything a real chat transcript would, the same role
+	// every other adapter's transcript tracker plays.
+	composer *composerStore
+
 	mu          sync.Mutex
 	curFile     string
 	offset      int64
@@ -103,6 +110,7 @@ func New() *Adapter {
 	return &Adapter{
 		home:        home,
 		starts:      procstat.NewCache(),
+		composer:    newComposerStore(home),
 		lastRows:    map[int]domain.ProcessInfo{},
 		lastSess:    map[int]string{},
 		lastCWD:     map[string]string{},
@@ -275,7 +283,7 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 		if alive {
 			status = "busy"
 		}
-		out = append(out, domain.SessionInfo{
+		si := domain.SessionInfo{
 			Tool:      Name,
 			ID:        sid,
 			PID:       pid,
@@ -283,14 +291,41 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 			CWD:       a.lastCWD[sid], // "" when no extension-host workspace label was ever seen
 			Status:    status,
 			UpdatedAt: time.Now(),
-		})
+		}
+		a.enrichWithComposer(&si, a.lastCWD[sid])
+		out = append(out, si)
 	}
 	if len(out) == 0 && alive {
 		// Process is running but we have no session-tagged rows yet (cold
 		// start, or a log we can't parse) — still surface liveness.
-		out = append(out, domain.SessionInfo{Tool: Name, Alive: true, Status: "busy", UpdatedAt: time.Now()})
+		si := domain.SessionInfo{Tool: Name, Alive: true, Status: "busy", UpdatedAt: time.Now()}
+		a.enrichWithComposer(&si, "")
+		out = append(out, si)
 	}
 	return out, nil
+}
+
+// enrichWithComposer fills Title/CWD/LastAction/tokens from Cursor's own
+// state.vscdb when a matching composer is found for workspaceLabel — the
+// same per-session transcript enrichment every other adapter's Sessions()
+// does, just against a real SQLite store instead of a JSONL transcript.
+// CWD gets upgraded from the process-monitor log's bare folder name to
+// the composer's real full filesystem path when a match is found — a
+// strictly more precise reading of the same fact, not a different one.
+func (a *Adapter) enrichWithComposer(si *domain.SessionInfo, workspaceLabel string) {
+	c, ok := a.composer.bestComposerForWorkspace(workspaceLabel)
+	if !ok {
+		return
+	}
+	si.Title = c.Name
+	if c.WorkspaceIdentifier.URI != nil && c.WorkspaceIdentifier.URI.FsPath != "" {
+		si.CWD = c.WorkspaceIdentifier.URI.FsPath
+	}
+	if usage, ok := a.composer.usageForComposer(c.ComposerID); ok {
+		si.LastAction = usage.LastAction
+		si.TokensIn = usage.TokensIn
+		si.TokensOut = usage.TokensOut
+	}
 }
 
 // isCursorIDEProcess matches the real Cursor.app IDE process only. A
