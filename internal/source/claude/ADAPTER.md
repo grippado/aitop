@@ -42,9 +42,14 @@ returning `ok=false` means "no reading," not "zero spend."
 
 ## Credential surface
 
-**None excluded** — Claude Code stores no plaintext API key this adapter reads;
-the package only ever touches `sessions/`, `projects/`, the cost files, and the
-ccstatusline cache. No `Walk`/`Glob`.
+**`~/.claude/.credentials.json`** (Claude Code's OAuth token / API credential)
+lives directly under `~/.claude`, a sibling of `sessions/`. It is
+**structurally unreachable** by this adapter: the package only ever `ReadDir`s
+the `sessions/` and `projects/` subtrees and reads named cost/cache files —
+never the config root, never `Walk`/`Glob`. Unlike `codex` (`allowlist.go` +
+`allowlist_test.go`), there is no dedicated guard test asserting this yet; the
+protection is structural-by-convention. Adding a `claude/allowlist_test.go`
+would make it CI-enforced.
 
 ## Known quirks
 
