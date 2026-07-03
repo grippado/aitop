@@ -115,4 +115,4 @@ in the reference environment.
   `paths-ignore: ["*.md", docs/**]`, so this structure does **not** trigger CI —
   its correctness is enforced by review and by the agents themselves, not by a
   pipeline.
-- Future proposals live in `docs/rfcs/NNNN-<slug>.md`, numbered from `0002`.
+- Future proposals live in `docs/rfcs/NNNN-<slug>.md`, numbered sequentially (`0001` and `0002` already exist).
