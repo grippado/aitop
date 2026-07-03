@@ -1,0 +1,24 @@
+name: Sync labels
+
+# Keeps the repo's issue labels in lockstep with .github/labels.yml.
+# Runs when that file changes on main, or on demand.
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/labels.yml"]
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EndBug/label-sync@52074158190acb45f3077f9099fea818aa43f97a # v2.3.3
+        with:
+          config-file: .github/labels.yml
+          # Don't delete labels that aren't in the file (GitHub defaults, etc.).
+          delete-other-labels: false

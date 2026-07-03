@@ -1,7 +1,7 @@
 name: 💡 Feature or idea
 description: A theme, a UI tweak, a new data point, an evolution of the agent structure…
 title: "💡 "
-labels: ["enhancement"]
+labels: ["✨ enhancement"]
 body:
   - type: markdown
     attributes:

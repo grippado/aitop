@@ -1,7 +1,7 @@
 name: 🔌 New tool adapter request
 description: aitop should watch a tool it doesn't cover yet (aider, windsurf, your-favorite-CLI…).
 title: "🔌 Adapter: "
-labels: ["adapter", "enhancement"]
+labels: ["🔌 adapter", "✨ enhancement"]
 body:
   - type: markdown
     attributes:

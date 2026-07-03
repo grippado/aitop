@@ -1,7 +1,7 @@
 name: 🐛 Bug report
 description: Something's wrong — a card lies, a crash, a stat that makes no sense.
 title: "🐛 "
-labels: ["bug"]
+labels: ["🐛 bug"]
 body:
   - type: markdown
     attributes:

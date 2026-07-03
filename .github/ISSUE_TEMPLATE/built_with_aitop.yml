@@ -1,7 +1,7 @@
 name: 🚀 I built something on top of aitop!
 description: A dashboard, an alerter, a harness controller, a fork that adds actions… show us!
 title: "🚀 from aitop, "
-labels: ["showcase", "built-with-aitop"]
+labels: ["🚀 showcase", "💛 built-with-aitop"]
 body:
   - type: markdown
     attributes:
