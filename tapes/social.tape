@@ -30,7 +30,7 @@ Enter
 Sleep 400ms
 Show
 
-Type "aitop --demo"
+Type "./aitop --demo"
 Sleep 400ms
 Enter
 Sleep 3000ms
