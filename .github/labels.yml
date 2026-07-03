@@ -1,0 +1,54 @@
+# Declarative labels for aitop — synced by .github/workflows/labels.yml
+# (EndBug/label-sync). Edit here, push to main, and the repo's labels update
+# themselves. Names carry emoji on purpose; keep them in sync with the
+# `labels:` fields in .github/ISSUE_TEMPLATE/*.yml.
+
+- name: "🐛 bug"
+  color: "d73a4a"
+  description: "A card lies, a crash, a stat that makes no sense"
+
+- name: "🔌 adapter"
+  color: "1d76db"
+  description: "A Source adapter — a tool aitop should watch"
+
+- name: "✨ enhancement"
+  color: "a2eeef"
+  description: "New capability or an improvement to an existing one"
+
+- name: "🎨 theme"
+  color: "b392f0"
+  description: "Color themes (the friendliest first contribution)"
+
+- name: "📝 docs"
+  color: "0075ca"
+  description: "Documentation, RFCs, learning material"
+
+- name: "🎓 learning"
+  color: "5319e7"
+  description: "The 'learn agentic orchestration with aitop' angle"
+
+- name: "🧬 agentic-structure"
+  color: "8250df"
+  description: "The .claude/ agent fleet and how it evolves (RFCs)"
+
+- name: "🕵️ honesty"
+  color: "0e1116"
+  description: "The one rule: never fabricate — render —, not 0/$0.00"
+
+- name: "🚀 showcase"
+  color: "fbca04"
+  description: "Something built on top of aitop"
+
+- name: "💛 built-with-aitop"
+  color: "ffd33d"
+  description: "Goes in the 'from aitop, …' gallery"
+
+# GitHub special-cases these exact names in its contributor UI — keep them
+# plain (no emoji) so the filters keep working.
+- name: "good first issue"
+  color: "7057ff"
+  description: "Good for newcomers — start here"
+
+- name: "help wanted"
+  color: "008672"
+  description: "Extra attention is welcome"

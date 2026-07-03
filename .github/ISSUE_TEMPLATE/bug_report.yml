@@ -1,0 +1,81 @@
+name: 🐛 Bug report
+description: Something's wrong — a card lies, a crash, a stat that makes no sense.
+title: "🐛 "
+labels: ["🐛 bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Oops. Let's squash it. 🐛🔨
+        <!-- Optional: a "this is fine 🔥" gif belongs here -->
+        The **#1 bug** in aitop's book is a card showing a **fabricated number** instead of an honest `—`. If you caught one of those, you caught the big fish. 🎣
+
+  - type: input
+    id: version
+    attributes:
+      label: 🏷️ aitop version
+      description: "`aitop --version` (or the commit/branch you built)"
+      placeholder: "v0.x.y / main@abc1234"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tool
+    attributes:
+      label: 🔌 Which tool's card is misbehaving?
+      description: If it's not about a specific tool (e.g. a crash on startup), pick "not tool-specific".
+      options:
+        - Claude Code
+        - Codex CLI
+        - Cursor (IDE)
+        - cursor-agent (CLI)
+        - opencode
+        - Other / a tool without a dedicated adapter
+        - Not tool-specific (UI, startup, system stats)
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 😵 What happened?
+      description: What did you see? What did you expect? Bonus points if a card showed a value it shouldn't have been able to know.
+      placeholder: "The Codex card showed $0.00 cost, but Codex bills via my own API key so it should be —."
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 🔁 Steps to reproduce
+      placeholder: |
+        1. Have <tool> running with a session open
+        2. Run `aitop` (or `aitop --once --json`)
+        3. Look at ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: snapshot
+    attributes:
+      label: 📸 Evidence
+      description: A screenshot, or better — paste the honest machine truth from `aitop --once --json` (redact paths/titles if private).
+      render: shell
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 💻 OS
+      options: [macOS, Linux, Windows (WSL), Other]
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: sanity
+    attributes:
+      label: ✅ Quick sanity
+      options:
+        - label: I searched existing issues and this isn't a duplicate 🔍
+          required: true
+        - label: This is a real bug, not "aitop showed `—`" (a `—` means "genuinely unavailable" — that's the feature, not the bug 😉)
+          required: true

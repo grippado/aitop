@@ -67,6 +67,27 @@ Cost-in-dollars was dropped from the expanded card view: on this machine's real 
 
 v2 roadmap: dedicated adapters for aider/windsurf, an external plugin mechanism, branch/dirty detection, a local trend history, and community-contributed themes (see [CONTRIBUTING.md](./CONTRIBUTING.md)).
 
+## Build on it, learn from it
+
+aitop is small on purpose, and it's meant to be a base, not just a tool:
+
+- **Build a product on its data.** `aitop --once --json` emits a structured,
+  honest, per-session snapshot. Poll it, chart it, alert on it — or fork it into
+  something that *acts* (harness control). See [Built with
+  aitop](./docs/BUILT-WITH-AITOP.md), and add what you built (*from aitop, …*).
+- **Learn agentic orchestration from it.** The repo carries a deliberately rich
+  AI-agent contribution structure (`.claude/`) as a readable, runnable worked
+  example — see the [learning guide](./docs/agentic-orchestration.md) and
+  [RFC 0001](./docs/rfcs/0001-agentic-contribution-architecture.md) /
+  [RFC 0002](./docs/rfcs/0002-evolving-agentic-structures.md).
+- **Contribute in minutes.** A new theme, a new tool adapter, or a fix — the
+  agent commands (`/aitop-theme`, `/aitop-adapter`, `/aitop-enhance`) walk you
+  through it. See [CONTRIBUTING](./CONTRIBUTING.md).
+
+Feedback and evolutions — of aitop *and* of its agent structure — are explicitly
+wanted. Open an [issue](https://github.com/grippado/aitop/issues) or a
+[discussion](https://github.com/grippado/aitop/discussions).
+
 ## License
 
 MIT

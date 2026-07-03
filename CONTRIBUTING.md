@@ -1,10 +1,29 @@
 # Contributing to aitop
 
+## Agentic contribution (the fast path)
+
+aitop ships an AI-agent contribution structure under [`.claude/`](./.claude/):
+orchestrator commands that dispatch specialized subagents, backed by per-adapter
+knowledge files. If you use Claude Code (or a compatible agent), it will follow
+the conventions in this file by construction — read
+[`.claude/README.md`](./.claude/README.md) for the full index.
+
+| You want to... | Run |
+|---|---|
+| Add a whole new tool adapter | `/aitop-adapter <tool>` |
+| Improve an existing adapter (fill a `—`) | `/aitop-enhance <tool>` |
+| Add a color theme (easiest first PR) | `/aitop-theme <name>` |
+| Propose something bigger first | `/aitop-rfc <subject>` |
+
+The rest of this file is the ground truth those agents (and you, by hand) follow.
+Nothing below is replaced by the agentic path — it's the source the agents read.
+The design rationale for this structure is [RFC 0001](./docs/rfcs/0001-agentic-contribution-architecture.md).
+
 ## Development
 
 ```sh
 go build ./...
-CGO_ENABLED=0 go test -race ./...
+CGO_ENABLED=1 go test -race ./...   # -race requires cgo (release builds use CGO_ENABLED=0)
 go vet ./...
 ```
 
@@ -46,3 +65,23 @@ vhs vhs.tape        # writes demo.gif
 ```
 
 If the card layout changes, re-record rather than hand-editing the GIF. `vhs.tape`'s `Set FontFamily` must name a monospace family that's actually installed (check with `system_profiler SPFontsDataType | grep -i <name>` on macOS) — a proportional fallback silently breaks every box-drawing/bar-alignment in the recording without erroring.
+
+## Learn the agent structure
+
+This repo is also a worked example of agentic orchestration — see
+[docs/agentic-orchestration.md](./docs/agentic-orchestration.md) for the guided
+tour and the transferable patterns, and [RFC 0001](./docs/rfcs/0001-agentic-contribution-architecture.md) /
+[RFC 0002](./docs/rfcs/0002-evolving-agentic-structures.md) for the design and its
+intended evolution. Built something on top of aitop? Add it to
+[Built with aitop](./docs/BUILT-WITH-AITOP.md).
+
+## Contributors
+
+Add yourself here in the same PR as your first contribution — name and a link
+(GitHub, site, whatever you like), one line:
+
+<!-- Add yourself below, one per line: - [Your Name](link) — what you contributed -->
+
+- [Gabriel Gripp](https://github.com/grippado) — creator & maintainer
+
+Thank you for helping aitop cover more of the agent ecosystem, more honestly. 💛
