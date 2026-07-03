@@ -1,6 +1,6 @@
 ---
 name: aitop-test-engineer
-description: Writes table tests for an adapter using a faked Reader (never real tool dirs, never subprocesses), plus the credential-allowlist guard test. Covers both the populated path and the source-absent → "—" path.
+description: Writes table tests for an adapter using a faked Reader (never real tool dirs, no subprocesses except the cursor-agent lsof case), plus the credential-allowlist guard test. Covers both the populated path and the source-absent → "—" path.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
 ---
@@ -12,7 +12,7 @@ missing and the field must stay `—`.
 ## Hard rules
 
 - **Never touch a real tool directory** (`~/.claude`, `~/.codex`, Cursor's
-  support dir) and **never spawn a subprocess**. Swap the package's `Reader`
+  support dir) and **never spawn a subprocess** (the one exception is `cursoragent`'s `lsof`, whose test skips when `lsof` isn't on PATH). Swap the package's `Reader`
   for a fake that returns canned bytes. Copy the fake-Reader pattern from
   `internal/source/claude/claude_test.go` / `transcript_test.go`.
 - **SQLite adapters are the one exception**: test against a **real temporary

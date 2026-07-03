@@ -50,15 +50,21 @@ them; do not re-derive them.
 3. **All filesystem access goes through the package `Reader`.** Only
    `<tool>/runner.go` may call `os.ReadFile`/`os.ReadDir`/`os.Stat`/`ReadFrom`.
    Everything else takes the `Reader` interface so tests swap a fake. Tests
-   never touch a real `~/.claude`/`~/.codex`/Cursor dir and never spawn a
-   subprocess.
+   never touch a real `~/.claude`/`~/.codex`/Cursor dir. The sole sanctioned
+   subprocess is the PID-scoped `lsof` in `cursoragent` (its test skips when
+   `lsof` isn't on PATH).
 
-4. **SQLite is the one exception, and it's disciplined.** `opencode`
+4. **External I/O beyond the `Reader` has exactly two disciplined exceptions.**
+   (a) **SQLite:** `opencode`
    (`opencode.db`) and `cursor/composer.go` (Cursor's shared `state.vscdb`) use
    `database/sql` + `modernc.org/sqlite` (pure Go — keeps `CGO_ENABLED=0`
    release builds intact), tested against a real temp DB. Every query is an
    exact-key lookup or an id-scoped `GLOB` the adapter already resolved — never
    `SELECT *` over a store that also holds other extensions' data.
+   (b) **The `lsof` subprocess:** `cursoragent/proccwd.go` shells out to
+   `lsof -a -p <pid> -d cwd -Fn` (scoped to a single PID) to resolve the live
+   process cwd, because gopsutil's `Cwd` is unimplemented on darwin without cgo.
+   It fails closed (returns `ok=false`) when `lsof` is absent.
 
 5. **Credential safety is an allowlist, not a habit.** Never
    `filepath.Walk`/`Glob` over a directory that can hold credentials. Use an
