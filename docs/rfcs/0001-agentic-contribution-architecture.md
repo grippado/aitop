@@ -106,8 +106,8 @@ in the reference environment.
 4. Context-loading cost drops versus re-deriving the invariants each run, because
    agents read the cached `ADAPTER.md` / `CLAUDE.md` instead of re-reading five
    adapters.
-5. `go build ./...`, `go vet ./...`, and `CGO_ENABLED=0 go test -race ./...` stay
-   green.
+5. `go build ./...`, `go vet ./...`, and `CGO_ENABLED=1 go test -race ./...`
+   (`-race` requires cgo; release builds stay `CGO_ENABLED=0`) stay green.
 
 ## Notes
 
