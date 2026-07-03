@@ -56,6 +56,8 @@ git diff --stat                      # scope of the change
 git diff -- internal/source/<tool>/  # the code to audit
 grep -RnE 'Walk\(|Glob\(|ReadDir\(|SELECT \*' internal/source/<tool>/
 ```
+> A **scoped** `ReadDir` over a known subtree (e.g. codex's `sessions/`) is 🟢 — not a finding. Only flag `ReadDir` whose root is (or could reach) a credential-holding directory, or an *unscoped* traversal.
+
 Read `runner.go` (is all I/O behind the `Reader`?), `allowlist.go` (is the
 credential file excluded + tested?), and the `Usage`/`Sessions` methods (is every
 populated field backed by a real read?).
