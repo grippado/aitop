@@ -32,7 +32,8 @@ sessions/usage live, plain files vs SQLite, the credential surface, and which
 `domain` fields are genuinely observable.
 
 ### 3. Write `docs/rfcs/NNNN-<slug>.md`
-Use this structure:
+Copy `docs/rfcs/TEMPLATE.md` and fill it in. Its structure (reproduced here for
+reference):
 
 ```md
 # RFC NNNN — <Title>

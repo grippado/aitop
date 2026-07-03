@@ -1,0 +1,66 @@
+name: 🔌 New tool adapter request
+description: aitop should watch a tool it doesn't cover yet (aider, windsurf, your-favorite-CLI…).
+title: "🔌 Adapter: "
+labels: ["adapter", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### More agents on the board! 🎛️
+        aitop's whole reason to exist is **breadth of honest coverage**, so a new adapter is the most-loved kind of request. 💛
+        <!-- Optional: a "shut up and take my tool" gif fits nicely here -->
+        > Feeling brave? You can *build* it, not just request it — run `/aitop-adapter <tool>` and the agent fleet walks you through it. See [`docs/agentic-orchestration.md`](https://github.com/grippado/aitop/blob/main/docs/agentic-orchestration.md).
+
+  - type: input
+    id: tool
+    attributes:
+      label: 🧰 Which tool?
+      placeholder: "aider / windsurf / gemini-cli / ..."
+    validations:
+      required: true
+
+  - type: input
+    id: link
+    attributes:
+      label: 🔗 Link to the tool
+      placeholder: "https://github.com/..."
+
+  - type: textarea
+    id: state
+    attributes:
+      label: 🗂️ Where does it keep its state on disk? (if you know)
+      description: The make-or-break question. Session files? A SQLite DB? A log? A config dir? Paths help *a lot*.
+      placeholder: |
+        e.g. ~/.aider/ has ... , sessions live in ... , looks like JSONL / SQLite / ¯\_(ツ)_/¯
+    validations:
+      required: true
+
+  - type: textarea
+    id: fields
+    attributes:
+      label: 🔍 What could a card honestly show?
+      description: |
+        Be honest about the `—`s! For each, is it **real** (observable on disk) or **impossible** (cloud-side / behind an API key)?
+      value: |
+        - Model: ✅ / — because …
+        - Title: ✅ / — because …
+        - Context % / tokens: ✅ / — because …
+        - Cost / rate limits: ✅ / — because …
+        - Last action: ✅ / — because …
+
+  - type: textarea
+    id: creds
+    attributes:
+      label: 🔐 Does its dir hold any credentials?
+      description: API keys, tokens, cookies? Name the file so we know to allowlist *around* it (aitop never walks a credential dir).
+      placeholder: "e.g. ~/.tool/auth.json holds an API key → must be excluded"
+
+  - type: checkboxes
+    id: sanity
+    attributes:
+      label: ✅ Quick sanity
+      options:
+        - label: I searched existing issues/PRs and this tool isn't already requested or supported 🔍
+          required: true
+        - label: This tool runs locally and writes *some* observable state (aitop can't watch a pure-cloud tool with nothing on disk)
+          required: true

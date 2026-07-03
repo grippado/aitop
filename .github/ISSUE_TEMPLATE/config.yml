@@ -1,0 +1,12 @@
+# Keep the "blank issue" escape hatch — not everything fits a form 🙂
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 Discussions (questions, ideas, "is this a bug or is it me?")
+    url: https://github.com/grippado/aitop/discussions
+    about: Not sure it's a bug? Want to brainstorm an adapter or theme? Start here — it's cozier than an issue.
+  - name: 🎓 Learn agentic orchestration with aitop
+    url: https://github.com/grippado/aitop/blob/main/docs/agentic-orchestration.md
+    about: This repo is a worked example of AI-agent orchestration. Read the guided tour before proposing structural changes.
+  - name: 🚀 Built something on top of aitop?
+    url: https://github.com/grippado/aitop/blob/main/docs/BUILT-WITH-AITOP.md
+    about: Add it to the "from aitop, …" gallery instead of opening an issue. We want to see it!

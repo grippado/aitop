@@ -1,0 +1,46 @@
+name: 💡 Feature or idea
+description: A theme, a UI tweak, a new data point, an evolution of the agent structure…
+title: "💡 "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Ooh, an idea. 💡✨
+        <!-- Optional: a "big brain" / galaxy-brain gif goes great here -->
+        Themes 🎨, UI polish, a new field for the JSON snapshot, or a rethink of the agent fleet — all welcome. If it's about **evolving the agent structure**, peek at [RFC 0002](https://github.com/grippado/aitop/blob/main/docs/rfcs/0002-evolving-agentic-structures.md) first — that trajectory is half the fun. 🧬
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 🎁 What flavor of idea?
+      options:
+        - 🎨 A new theme
+        - 🖼️ UI / card layout
+        - 📊 A new data point in the snapshot
+        - 🧬 Evolving the agent structure (agents/commands/RFC)
+        - 🌀 Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: 🌱 The idea
+      description: What do you want, and what does it unlock?
+      placeholder: "It'd be neat if …, so that …"
+    validations:
+      required: true
+
+  - type: textarea
+    id: honesty
+    attributes:
+      label: 🕵️ Honesty gut-check
+      description: |
+        If your idea adds a number to a card or the JSON — is it something aitop can *truly observe*, or would it require guessing? (We render `—` over a guess, every time.)
+      placeholder: "This value comes from <real on-disk source>, so it's honest. / N/A — it's a theme."
+
+  - type: markdown
+    attributes:
+      value: |
+        > 🎨 **Just want to add a theme?** You can skip straight to a PR — it's a one-file change in `internal/ui/theme/theme.go`. Run `/aitop-theme <name>` or see [CONTRIBUTING](https://github.com/grippado/aitop/blob/main/CONTRIBUTING.md#adding-a-new-theme). It's the friendliest first contribution. 💛

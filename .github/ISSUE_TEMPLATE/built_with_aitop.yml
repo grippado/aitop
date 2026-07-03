@@ -1,0 +1,55 @@
+name: 🚀 I built something on top of aitop!
+description: A dashboard, an alerter, a harness controller, a fork that adds actions… show us!
+title: "🚀 from aitop, "
+labels: ["showcase", "built-with-aitop"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### YES. This is our favorite issue type. 🚀💛
+        <!-- Optional: a "shut up and take my money" / confetti gif absolutely belongs here 🎉 -->
+        You took aitop's `--once --json` snapshot and *built a thing*. That's the whole dream — aitop is the sensor, you built the product.
+        > Prefer a PR? Even better — add yourself straight to the [*from aitop, …* gallery](https://github.com/grippado/aitop/blob/main/docs/BUILT-WITH-AITOP.md). This issue is here for when you'd rather just tell us. 😄
+
+  - type: input
+    id: name
+    attributes:
+      label: 🏷️ Project name
+    validations:
+      required: true
+
+  - type: input
+    id: link
+    attributes:
+      label: 🔗 Link
+      placeholder: "repo / site / demo"
+    validations:
+      required: true
+
+  - type: input
+    id: oneliner
+    attributes:
+      label: ✨ "from aitop, ______"
+      description: One honest line — what does it do?
+      placeholder: "from aitop, a Slack bot that pings me when any agent's context passes 90%."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 🧩 What kind of thing is it?
+      options:
+        - 📊 Dashboard / history / analytics
+        - 🔔 Alerting / notifications / routing
+        - 🎮 Non-read-only (it *acts* — pauses/nudges/controls a harness)
+        - 🔌 A new adapter / fork
+        - 🌀 Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: feedback
+    attributes:
+      label: 🎤 Was aitop's JSON missing anything you needed?
+      description: This is gold for us. Where did you have to work around a gap, or wish for a field that wasn't there?
