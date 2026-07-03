@@ -36,7 +36,7 @@ data renders `—`, never a fake `0` / `$0.00` / `0/0`.
 ```sh
 go build ./...
 go vet ./...
-CGO_ENABLED=0 go test -race ./...   # -race needs cgo locally: CGO_ENABLED=1
+CGO_ENABLED=1 go test -race ./...   # -race requires cgo (release builds use CGO_ENABLED=0)
 ```
 
 - [ ] All three green 🟢

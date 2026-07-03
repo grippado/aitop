@@ -61,7 +61,7 @@ For the targeted gap:
 
 ### 5. Verify + summarize
 ```sh
-go build ./... && go vet ./... && CGO_ENABLED=0 go test -race ./...
+go build ./... && go vet ./... && CGO_ENABLED=1 go test -race ./...
 ```
 Report the audit verdict, what changed, and the verify output. Offer a PR; do
 not open one unprompted.

@@ -72,8 +72,8 @@ them; do not re-derive them.
    live on `SessionInfo`; tool-wide usage lives on `UsageInfo`; they never mix.
 
 7. **Green means all three.** `go build ./...`,
-   `CGO_ENABLED=0 go test -race ./...` (CI runs `-race` with `CGO_ENABLED=1`;
-   release builds stay `CGO_ENABLED=0`), and `go vet ./...`. A new adapter
+   `CGO_ENABLED=1 go test -race ./...` (`-race` requires cgo; the release build
+   stays `CGO_ENABLED=0`), and `go vet ./...`. A new adapter
    isn't done until the README support table and the `--demo` roster are honest
    about what it does and doesn't provide.
 

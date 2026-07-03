@@ -60,7 +60,7 @@ aitop-ui-integrator  (main.go slice, collector/cards render, --demo/--once hones
 aitop-docs-scribe  (README support table + internal/source/<tool>/ADAPTER.md)
    │
    ▼
-verify: go build ./... && go vet ./... && CGO_ENABLED=0 go test -race ./...
+verify: go build ./... && go vet ./... && CGO_ENABLED=1 go test -race ./...
    │
    ▼
 open PR   (only when the human asks)
