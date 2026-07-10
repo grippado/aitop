@@ -95,6 +95,9 @@ func TestSessions_ParsesSessionFiles(t *testing.T) {
 		},
 	}
 	withFakeReader(t, f)
+	// Guard the trailing PPID walk against live gopsutil (invariant 3) in case
+	// PID 111 happens to be alive on the host running the suite.
+	withFakePpid(t, map[int]int{})
 
 	a := &Adapter{configDir: configDir, transcript: newTranscriptTracker()}
 	sessions, err := a.Sessions(nil)

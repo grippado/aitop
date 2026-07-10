@@ -188,6 +188,9 @@ func TestSessions_PerSessionTokensDontMixAcrossSessions(t *testing.T) {
 		},
 	}
 	withFakeReader(t, f)
+	// PID 1 is alive, so Sessions() runs the PPID walk; feed a synthetic tree
+	// so it never touches live gopsutil (golden invariant 3).
+	withFakePpid(t, map[int]int{})
 
 	a := &Adapter{configDir: configDir, transcript: newTranscriptTracker()}
 	sessions, err := a.Sessions(nil)

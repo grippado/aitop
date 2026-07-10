@@ -156,6 +156,13 @@ func (m Model) View() string {
 
 	cs := cards.BuildCards(m.snapshot, m.toolFilter)
 	cards.Sort(cs, m.sortCol)
+	if !m.grid {
+		// LIST layout nests spawned children under their parent (RFC 0003);
+		// GRID stays flat (badge + provenance still show on each card). Done
+		// before the selection clamp so m.selected indexes the final order
+		// and the scroll math lines up.
+		cs = cards.NestByParent(cs)
+	}
 	if m.selected >= len(cs) {
 		m.selected = len(cs) - 1
 	}
