@@ -30,9 +30,38 @@ const CardHeight = 14
 func RenderList(th theme.Theme, cs []Card, selected int, width int) string {
 	var blocks []string
 	for i, c := range cs {
-		blocks = append(blocks, RenderCard(th, c, width, i == selected))
+		pad := c.Depth * indentPerDepth
+		block := RenderCard(th, c, width-pad, i == selected)
+		if pad > 0 {
+			block = indentBlock(th, block, pad)
+		}
+		blocks = append(blocks, block)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, blocks...)
+}
+
+// indentPerDepth is the left gutter, in columns, a spawned child is inset
+// per nesting level in LIST layout — enough to read as "under" its parent
+// without stealing card width.
+const indentPerDepth = 3
+
+// indentBlock left-pads every line of a rendered card by pad columns, with
+// a dim vertical guide in the first column so a nested (spawned) child reads
+// as belonging to the card above it. It adds no LINES — height stays
+// CardHeight — so model.go's scroll math (row * CardHeight) is untouched;
+// the card itself was already rendered pad columns narrower to keep the
+// total width constant.
+func indentBlock(th theme.Theme, block string, pad int) string {
+	if pad < 1 {
+		return block
+	}
+	guide := lipgloss.NewStyle().Foreground(th.Border).Render("│")
+	prefix := guide + strings.Repeat(" ", pad-1)
+	lines := strings.Split(block, "\n")
+	for i, ln := range lines {
+		lines[i] = prefix + ln
+	}
+	return strings.Join(lines, "\n")
 }
 
 // RenderGrid packs cards two-per-row, half width each — best-effort layout
@@ -259,10 +288,67 @@ func stateBadge(c Card) (string, lipgloss.Color) {
 // still true information (derived from the session's own CWD), never a
 // fabricated summary standing in for the real thing.
 func renderTitle(th theme.Theme, c Card, width int) string {
-	if c.Title != "" {
-		return lipgloss.NewStyle().Bold(true).Foreground(th.Accent).Render(widgets.TruncateRight(c.Title, width))
+	// The RFC 0003 lineage segment (kind badge + provenance) rides on the
+	// right of the header line rather than a line of its own — every card is
+	// a fixed CardHeight, and a new line would break the scroll math in
+	// model.go. The title keeps the left, truncated to whatever the lineage
+	// doesn't claim (at least minTitle columns).
+	const minTitle = 10
+	lineage := renderLineage(th, c, width-minTitle-1)
+
+	titleBudget := width
+	if lineage != "" {
+		titleBudget = width - lipgloss.Width(lineage) - 1 // 1-col gap
 	}
-	return lipgloss.NewStyle().Foreground(th.Muted).Render(widgets.TruncateRight(fallbackTitle(c), width))
+	var title string
+	if c.Title != "" {
+		title = lipgloss.NewStyle().Bold(true).Foreground(th.Accent).Render(widgets.TruncateRight(c.Title, titleBudget))
+	} else {
+		title = lipgloss.NewStyle().Foreground(th.Muted).Render(widgets.TruncateRight(fallbackTitle(c), titleBudget))
+	}
+	if lineage == "" {
+		return title
+	}
+	gap := width - lipgloss.Width(title) - lipgloss.Width(lineage)
+	if gap < 1 {
+		gap = 1
+	}
+	return title + strings.Repeat(" ", gap) + lineage
+}
+
+// renderLineage builds the dim header suffix that surfaces RFC 0003 session
+// lineage: a kind badge ("[bg]" / "[interactive]") when the tool reports a
+// kind, and a provenance note for a spawned child. Honest by construction —
+// the badge shows only when Kind is non-empty, and "▸ spawned by <parent>"
+// only when the parent actually resolved to a card on the board; otherwise
+// "▸ spawned (parent not on board)", never a fabricated parent name. Returns
+// "" when there's nothing to say (no kind, no parent) so the title keeps the
+// whole width and no blank badge appears. Head-truncates (keeping the badge)
+// when it can't fit max columns, since the LIST indent already carries the
+// nesting signal.
+func renderLineage(th theme.Theme, c Card, max int) string {
+	if max < 3 {
+		return ""
+	}
+	var parts []string
+	if c.Kind != "" {
+		parts = append(parts, "["+c.Kind+"]")
+	}
+	if c.ParentPID != 0 {
+		if c.ParentLabel != "" {
+			parts = append(parts, "▸ spawned by "+c.ParentLabel)
+		} else {
+			parts = append(parts, "▸ spawned (parent not on board)")
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	s := strings.Join(parts, " ")
+	if r := []rune(s); lipgloss.Width(s) > max {
+		s = string(r[:max-1]) + "…"
+	}
+	return lipgloss.NewStyle().Foreground(th.Muted).Render(s)
 }
 
 // fallbackTitle computes a placeholder header for a session whose adapter

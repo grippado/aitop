@@ -128,6 +128,11 @@ structures](./rfcs/0002-evolving-agentic-structures.md) for how the same fleet
 grows to cover non-read-only actions, external plugins, and harness control, and
 how each step is recorded as a case study rather than a silent refactor.
 
+The first such record is [Case study 0001 — Session
+lineage](./case-studies/0001-session-lineage.md): a full feature run through
+`/aitop-enhance`, including the moment the honesty gate caught a fabricated
+statistic the author had written into the RFC prose itself.
+
 And if you build something on top of aitop, or evolve this structure in your own
 repo, we want to hear about it — see [Built with
 aitop](./BUILT-WITH-AITOP.md).

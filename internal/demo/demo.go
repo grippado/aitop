@@ -20,28 +20,31 @@ func New() *Generator {
 	return &Generator{start: time.Now()}
 }
 
-// sessionPhase filters the fixed pool of demo sessions (passed positionally
-// in demo-1..demo-6 order) down to whichever subset is "present" at t
-// seconds since the generator started — three phases, timed against
-// vhs.tape's own Sleep durations, that build the board up rather than
-// dumping all six at once:
+// sessionPhase filters the fixed pool of demo sessions down to whichever
+// subset is "present" at t seconds since the generator started — three
+// phases, timed against vhs.tape's own Sleep durations, that build the board
+// up rather than dumping everything at once:
 //
-//   - t <  4s: just claude-code, codex, and opencode (demo-1/3/6) — a
-//     clean, information-dense opening, each card fully populated.
-//   - t < 11s: cursor-agent joins (demo-5).
-//   - t >=11s: a second Claude Code session joins (demo-2, "a new claude
-//     code") alongside Cursor (demo-4) — Cursor's card is genuinely the
-//     sparsest one (the IDE adapter has no transcript/title source, see
-//     cards.go), so it lands late, one card among five full ones, instead
-//     of being the first thing a viewer sees.
-func sessionPhase(t float64, demo1, demo2, demo3, demo4, demo5, demo6 domain.SessionInfo) []domain.SessionInfo {
+//   - t <  4s: the RFC 0003 lineage group is on screen from the very first
+//     frame — an interactive Claude Code root (root) with its TWO spawned
+//     background children (bgTests, bgReview) whose ParentPID is the root's
+//     PID — plus codex and opencode. This is what `--once --demo` captures,
+//     so the "spawned by" provenance and the nesting are always visible in a
+//     screenshot.
+//   - t < 11s: cursor-agent joins (cursorAgent).
+//   - t >=11s: an unrelated second Claude Code root (secondRoot) joins
+//     alongside Cursor (cursorIDE) — Cursor's card is genuinely the sparsest
+//     one (the IDE adapter has no transcript/title source, see cards.go), so
+//     it lands late, one card among many full ones, instead of being the
+//     first thing a viewer sees.
+func sessionPhase(t float64, root, bgTests, bgReview, secondRoot, codex, cursorIDE, cursorAgent, opencode domain.SessionInfo) []domain.SessionInfo {
 	switch {
 	case t < 4:
-		return []domain.SessionInfo{demo1, demo3, demo6}
+		return []domain.SessionInfo{root, bgTests, bgReview, codex, opencode}
 	case t < 11:
-		return []domain.SessionInfo{demo1, demo3, demo6, demo5}
+		return []domain.SessionInfo{root, bgTests, bgReview, codex, opencode, cursorAgent}
 	default:
-		return []domain.SessionInfo{demo1, demo3, demo6, demo5, demo2, demo4}
+		return []domain.SessionInfo{root, bgTests, bgReview, codex, opencode, cursorAgent, secondRoot, cursorIDE}
 	}
 }
 
@@ -64,6 +67,8 @@ func (g *Generator) Snapshot() domain.Snapshot {
 	// up" over time, selling the context-monitor thesis rather than
 	// sitting static.
 	claudeCtx := 55 + 10*math.Sin(t/9)
+	bgTestsCtx := 31 + 7*math.Sin(t/8+1)
+	bgReviewCtx := 44 + 9*math.Sin(t/6+2)
 	codexCtx := 22 + 6*math.Sin(t/11+1)
 	opencodeCtx := 59 + 8*math.Sin(t/7+2)
 
@@ -78,7 +83,7 @@ func (g *Generator) Snapshot() domain.Snapshot {
 			NetDownBps:    340,
 		},
 		Tools: []domain.ToolStatus{
-			{Tool: "claude-code", Installed: true, Running: true, SessionCount: 2, OldestSessionSec: 2*3600 + 14*60},
+			{Tool: "claude-code", Installed: true, Running: true, SessionCount: 4, OldestSessionSec: 2*3600 + 14*60},
 			{Tool: "codex", Installed: true, Running: true, SessionCount: 1, OldestSessionSec: 6 * 60},
 			{Tool: "cursor", Installed: true, Running: true, SessionCount: 1, OldestSessionSec: 41 * 60},
 			{Tool: "cursor-agent", Installed: true, Running: true, SessionCount: 1, OldestSessionSec: 3 * 60},
@@ -86,6 +91,8 @@ func (g *Generator) Snapshot() domain.Snapshot {
 		},
 		Processes: []domain.ProcessInfo{
 			{PID: 41221, Tool: "claude-code", Label: "claude", CPUPct: 8 + 4*math.Abs(math.Sin(t)), MemMB: 350, StartedAt: g.start},
+			{PID: 41501, Tool: "claude-code", Label: "claude (bg)", CPUPct: 5 + 3*math.Abs(math.Sin(t/2+1)), MemMB: 240, StartedAt: g.start},
+			{PID: 41502, Tool: "claude-code", Label: "claude (bg)", CPUPct: 4 + 2*math.Abs(math.Sin(t/3+2)), MemMB: 210, StartedAt: g.start},
 			{PID: 41090, Tool: "claude-code", Label: "claude daemon", CPUPct: 0.1, MemMB: 190, StartedAt: g.start},
 			{PID: 60123, Tool: "codex", Label: "codex", CPUPct: 3 + 2*math.Abs(math.Sin(t/2)), MemMB: 210, StartedAt: g.start},
 			{PID: 52110, Tool: "cursor", Label: "Cursor Helper: mcp-process", CPUPct: 2.0, MemMB: 130, StartedAt: g.start},
@@ -104,16 +111,37 @@ func (g *Generator) Snapshot() domain.Snapshot {
 		// after another — a live board actually changing shape, not just
 		// its numbers wiggling. See sessionPhase above for the exact
 		// timing this is tuned against (vhs.tape's Sleep durations).
+		//
+		// The claude-code lineage (RFC 0003): demo-1 is an INTERACTIVE root,
+		// and demo-1a/demo-1b are its two BACKGROUND children — their
+		// ParentPID (41221) is demo-1's own PID, so the UI can honestly draw
+		// "▸ spawned by Corrigir tábua de marés" and nest them under it.
+		// demo-2 is an unrelated second interactive root (ParentPID 0), to
+		// prove roots and children read differently.
 		Sessions: sessionPhase(t,
 			domain.SessionInfo{
 				Tool: "claude-code", ID: "demo-1", PID: 41221, Alive: true, CWD: "/Users/demo/www/guia-cumuru", Branch: "main", Dirty: true, Model: "opus 4.8", Status: "busy", UpdatedAt: now.Add(-14 * time.Minute),
 				Title: "Corrigir tábua de marés", LastAction: "🔧 Bash: go test ./modules/mares/... -run TestTabua",
 				TokensIn: 70000, TokensOut: 21000, ContextUsedPct: claudeCtx,
+				Kind: "interactive",
+			},
+			domain.SessionInfo{
+				Tool: "claude-code", ID: "demo-1a", PID: 41501, Alive: true, CWD: "/Users/demo/www/guia-cumuru", Branch: "main", Model: "sonnet 5", Status: "busy", UpdatedAt: now.Add(-1 * time.Minute),
+				Title: "Rodar suíte de testes de marés", LastAction: "🔧 Bash: go test ./modules/mares/...",
+				TokensIn: 8200, TokensOut: 1400, ContextUsedPct: bgTestsCtx,
+				Kind: "bg", ParentPID: 41221,
+			},
+			domain.SessionInfo{
+				Tool: "claude-code", ID: "demo-1b", PID: 41502, Alive: true, CWD: "/Users/demo/www/guia-cumuru", Branch: "main", Model: "sonnet 5", Status: "busy", UpdatedAt: now.Add(-2 * time.Minute),
+				Title: "Revisar diff dos módulos", LastAction: "🔧 Read: modules/mares/tabua.go",
+				TokensIn: 12600, TokensOut: 2100, ContextUsedPct: bgReviewCtx,
+				Kind: "bg", ParentPID: 41221,
 			},
 			domain.SessionInfo{
 				Tool: "claude-code", ID: "demo-2", PID: 41090, Alive: true, CWD: "/Users/demo/cangaco", Branch: "main", Model: "sonnet 5", Status: "idle", UpdatedAt: now.Add(-2*time.Hour - 14*time.Minute),
 				Title: "Sincronizar dotfiles", LastAction: "💭 Aguardando confirmação do usuário para o merge",
 				TokensIn: 12400, TokensOut: 3100,
+				Kind: "interactive",
 			},
 			domain.SessionInfo{
 				Tool: "codex", ID: "demo-3", PID: 60123, Alive: true, CWD: "/Users/demo/www/isaac/backoffice", Model: "gpt-5.4-mini", Status: "busy", UpdatedAt: now.Add(-6 * time.Minute),

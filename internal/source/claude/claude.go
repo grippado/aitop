@@ -92,6 +92,7 @@ type sessionFile struct {
 	SessionID string `json:"sessionId"`
 	CWD       string `json:"cwd"`
 	Status    string `json:"status"`
+	Kind      string `json:"kind"`      // Claude Code's own tag: "bg" | "interactive"
 	UpdatedAt int64  `json:"updatedAt"` // unix ms
 }
 
@@ -120,6 +121,7 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 			PID:       sf.PID,
 			Alive:     sf.PID != 0 && processAlive(sf.PID),
 			CWD:       sf.CWD,
+			Kind:      sf.Kind, // verbatim passthrough; empty if the file omits it
 			Status:    normalizeStatus(sf.Status),
 			UpdatedAt: msToTime(sf.UpdatedAt),
 		}
@@ -131,7 +133,65 @@ func (a *Adapter) Sessions(ctx context.Context) ([]domain.SessionInfo, error) {
 		}
 		out = append(out, si)
 	}
+	resolveParentPIDs(ctx, out)
 	return out, nil
+}
+
+// maxParentWalkHops bounds the PPID walk so a pathological / cyclic process
+// tree can never spin the adapter. 40 matches the probe used to verify RFC
+// 0003 on a real machine (a bg child resolved to its interactive parent in
+// far fewer hops, through non-session hosts).
+const maxParentWalkHops = 40
+
+// ppidOf returns the parent PID of pid via gopsutil. It is a package-level var
+// so tests can inject a synthetic process tree and never touch the live
+// machine (golden invariant 3: the walk uses the gopsutil process API, the
+// same category as the daemon-fallback scan — never the file Reader). ok=false
+// means the process left the tree / can't be inspected, which ends the walk.
+var ppidOf = func(ctx context.Context, pid int) (ppid int, ok bool) {
+	p, err := gproc.NewProcessWithContext(ctx, int32(pid))
+	if err != nil {
+		return 0, false
+	}
+	pp, err := p.PpidWithContext(ctx)
+	if err != nil {
+		return 0, false
+	}
+	return int(pp), true
+}
+
+// resolveParentPIDs sets ParentPID on each ALIVE session by walking its PPID
+// chain until it reaches the FIRST ancestor that is itself a tracked session
+// PID. The chain legitimately passes through untracked hosts ("claude",
+// "bg-pty-host") before reaching the real parent session, so the walk does NOT
+// stop at the first non-session ancestor. A root / orphan (walk ends or hits
+// the cap without finding a tracked ancestor) keeps ParentPID 0. Never sets a
+// session's ParentPID to its own PID.
+func resolveParentPIDs(ctx context.Context, sessions []domain.SessionInfo) {
+	sessionPIDs := make(map[int]bool, len(sessions))
+	for _, s := range sessions {
+		if s.PID != 0 {
+			sessionPIDs[s.PID] = true
+		}
+	}
+	for i := range sessions {
+		s := &sessions[i]
+		if s.PID == 0 || !s.Alive {
+			continue
+		}
+		pid := s.PID
+		for hop := 0; hop < maxParentWalkHops; hop++ {
+			ppid, ok := ppidOf(ctx, pid)
+			if !ok || ppid == 0 || ppid == 1 {
+				break // root / left the process tree
+			}
+			if ppid != s.PID && sessionPIDs[ppid] {
+				s.ParentPID = ppid // first tracked ancestor wins
+				break
+			}
+			pid = ppid // keep walking through untracked hosts
+		}
+	}
 }
 
 // Processes returns real CPU/mem for every session PID, plus a name-pattern

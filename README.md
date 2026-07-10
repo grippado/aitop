@@ -63,6 +63,8 @@ Every existing "aitop"-named project (and the excellent but tmux-bound `agent-da
 | opencode | ✅ | ✅ | ✅ (opencode's own session title) | ✅ (own models catalog cache gives the real display name) | ✅ (per-session, straight from opencode's own SQLite state; real context window from its models catalog) | Not available (its own cost figure is lifetime-cumulative, not day/month-scoped — see the adapter's own doc comment) |
 | Other AI CLIs (aider, windsurf, ...) | Best-effort via process-name match | — | — | — | — | — |
 
+Session lineage — the `[bg]`/`[interactive]` kind badge and the `▸ spawned by <parent>` nesting that indents a spawned child under its parent in list view — is **Claude Code only** today: it comes from Claude Code's own `kind` tag plus a bounded process-tree walk to the first ancestor that is itself a tracked session. The other adapters leave both blank until they expose a real source for them — no fake badge, no guessed parent (hence no extra ✅ column above).
+
 Cost-in-dollars was dropped from the expanded card view: on this machine's real data the cost-day/cost-month files aitop originally read haven't been written in weeks, so it never showed anything but a fake `$0.00`. Fields still unpopulated by any adapter (git branch/dirty state) render as `—` on real data today; `--demo` shows what the card looks like once those land.
 
 v2 roadmap: dedicated adapters for aider/windsurf, an external plugin mechanism, branch/dirty detection, a local trend history, and community-contributed themes (see [CONTRIBUTING.md](./CONTRIBUTING.md)).

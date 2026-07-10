@@ -50,6 +50,20 @@ type SessionInfo struct {
 	TokensIn       int64   `json:"tokens_in,omitempty"`
 	TokensOut      int64   `json:"tokens_out,omitempty"`
 	ContextUsedPct float64 `json:"context_used_pct,omitempty"`
+
+	// Kind is the session's own kind as reported by the tool itself
+	// (Claude Code: "bg" | "interactive"), read verbatim from its state —
+	// never synthesized. Empty for adapters whose tool has no such
+	// concept, which the UI renders with no badge; an empty Kind means
+	// "the tool doesn't tell us", not a real classification.
+	Kind string `json:"kind,omitempty"`
+	// ParentPID is the PID of another session ON THIS BOARD that spawned
+	// this one, resolved by walking the OS process tree until the first
+	// ancestor that is itself a tracked session. 0 means "no visible
+	// parent on this board" — either a genuine root or a parent aitop
+	// doesn't track — NOT "orphan proven". Never fabricated: set only when
+	// the walk actually lands on a tracked session's PID.
+	ParentPID int `json:"parent_pid,omitempty"`
 }
 
 // UsageInfo describes cost/token/rate-limit usage for a tool. Available=false

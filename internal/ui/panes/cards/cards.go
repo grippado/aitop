@@ -69,6 +69,19 @@ type Card struct {
 	LastAction string  // e.g. "🔧 Bash: go test ./..." — "" when unavailable
 	AgeSec     float64 // seconds since last activity
 
+	// Session lineage (RFC 0003). Kind is the tool's own session kind
+	// ("bg" | "interactive"), empty when the tool has no such concept — the
+	// UI shows no badge then. ParentPID is the PID of another CARDED session
+	// that spawned this one (0 = a root); ParentLabel is that parent's
+	// display label, resolved from the board — "" when ParentPID doesn't
+	// land on a card (the UI says "parent not on board", never invents a
+	// name). Depth is the LIST-layout nesting indent (0 = root), set by
+	// NestByParent; GRID leaves it 0 and stays flat.
+	Kind        string
+	ParentPID   int
+	ParentLabel string
+	Depth       int
+
 	HasContext bool
 	ContextPct float64
 
@@ -171,6 +184,7 @@ func BuildCards(snap domain.Snapshot, toolFilter string) []Card {
 			Tool: s.Tool, SessionID: s.ID, PID: s.PID, Status: s.Status,
 			Alive: s.Alive, CWD: s.CWD, Branch: s.Branch, Dirty: s.Dirty, Model: s.Model,
 			Title: s.Title, LastAction: s.LastAction,
+			Kind: s.Kind, ParentPID: s.ParentPID,
 		}
 		if !s.UpdatedAt.IsZero() {
 			c.AgeSec = now.Sub(s.UpdatedAt).Seconds()
@@ -219,6 +233,88 @@ func BuildCards(snap domain.Snapshot, toolFilter string) []Card {
 		}
 
 		out = append(out, c)
+	}
+
+	// Resolve each spawned child's ParentPID to the parent card's display
+	// label — but only when the parent is itself on the board (carded). A
+	// ParentPID that matches no card stays unlabeled, so the UI renders
+	// "spawned (parent not on board)" instead of inventing a relationship
+	// (invariant #2: never fabricate). Done as a second pass so a child can
+	// name a parent that sorts after it.
+	labelByPID := map[int]string{}
+	for i := range out {
+		if out[i].PID != 0 {
+			labelByPID[out[i].PID] = cardLabel(out[i])
+		}
+	}
+	for i := range out {
+		if out[i].ParentPID != 0 {
+			out[i].ParentLabel = labelByPID[out[i].ParentPID]
+		}
+	}
+	return out
+}
+
+// cardLabel is how a card names itself when another card cites it as a
+// spawning parent: its real Title when it has one, else the session ID —
+// never a fabricated summary.
+func cardLabel(c Card) string {
+	if c.Title != "" {
+		return c.Title
+	}
+	return c.SessionID
+}
+
+// NestByParent reorders cards (stably) so each spawned child sits directly
+// under its parent card, and sets Card.Depth to the resulting indent level
+// (0 = root). A child whose ParentPID isn't a carded PID keeps its sorted
+// position at depth 0 — its provenance line already says the parent isn't
+// on the board. Only the LIST layout calls this; GRID stays flat. The
+// returned slice has the same length as the input (every card is emitted
+// exactly once, even in a pathological parent cycle).
+func NestByParent(cs []Card) []Card {
+	onBoard := map[int]bool{}
+	for _, c := range cs {
+		if c.PID != 0 {
+			onBoard[c.PID] = true
+		}
+	}
+	childrenOf := map[int][]int{} // parent PID -> child indices, in input order
+	var roots []int
+	for i, c := range cs {
+		if c.ParentPID != 0 && c.ParentPID != c.PID && onBoard[c.ParentPID] {
+			childrenOf[c.ParentPID] = append(childrenOf[c.ParentPID], i)
+		} else {
+			roots = append(roots, i)
+		}
+	}
+
+	out := make([]Card, 0, len(cs))
+	visited := make([]bool, len(cs))
+	var emit func(i, depth int)
+	emit = func(i, depth int) {
+		if visited[i] {
+			return
+		}
+		visited[i] = true
+		c := cs[i]
+		c.Depth = depth
+		out = append(out, c)
+		for _, ci := range childrenOf[cs[i].PID] {
+			emit(ci, depth+1)
+		}
+	}
+	for _, i := range roots {
+		emit(i, 0)
+	}
+	// Any card unreachable from a root (a parent cycle) still gets emitted,
+	// flat, so nesting can never drop a card from the board.
+	for i := range cs {
+		if !visited[i] {
+			c := cs[i]
+			c.Depth = 0
+			out = append(out, c)
+		}
 	}
 	return out
 }
