@@ -25,6 +25,7 @@ import (
 	"github.com/grippado/aitop/internal/source/opencode"
 	"github.com/grippado/aitop/internal/ui"
 	"github.com/grippado/aitop/internal/version"
+	"github.com/grippado/aitop/internal/webserver"
 )
 
 func main() {
@@ -32,6 +33,8 @@ func main() {
 		once     = flag.Bool("once", false, "print a single snapshot and exit, instead of the live TUI")
 		asJSON   = flag.Bool("json", false, "with --once, print the snapshot as JSON instead of a text summary")
 		demoMode = flag.Bool("demo", false, "use synthetic data instead of reading real tool state (for screenshots/GIFs/dev)")
+		serve    = flag.Bool("serve", false, "serve the read-only browser dashboard instead of the TUI")
+		addr     = flag.String("addr", "127.0.0.1:8787", "with --serve, the host:port to bind (localhost by default — routable binds are an explicit choice)")
 		refresh  = flag.Duration("refresh", 2*time.Second, "process/CPU sample interval")
 		showVer  = flag.Bool("version", false, "print version and exit")
 	)
@@ -55,6 +58,18 @@ func main() {
 
 	if *once {
 		runOnce(pull, *demoMode, *asJSON)
+		return
+	}
+
+	if *serve {
+		// The browser view reuses the exact same PullFunc the TUI does — it
+		// is a read-only consumer of the same Snapshot, never a second data
+		// path. See internal/webserver and docs/rfcs/0004-aitop-web-view.md.
+		fmt.Fprintf(os.Stderr, "aitop: serving read-only dashboard at http://%s\n", *addr)
+		if err := webserver.Run(webserver.PullFunc(pull), *refresh, *addr); err != nil {
+			fmt.Fprintln(os.Stderr, "aitop:", err)
+			os.Exit(1)
+		}
 		return
 	}
 

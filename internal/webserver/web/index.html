@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <title>aitop · agent board</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='13' font-size='13'%3E%F0%9F%9B%B0%EF%B8%8F%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">aitop</span>
+      <span class="tagline">agent board · read-only</span>
+    </div>
+    <div class="controls">
+      <label class="ctl">
+        tool
+        <select id="filter-tool"><option value="">all</option></select>
+      </label>
+      <label class="ctl">
+        sort
+        <select id="sort-col">
+          <option value="context">context %</option>
+          <option value="tokens">tokens</option>
+          <option value="age">age</option>
+          <option value="tool">tool</option>
+        </select>
+      </label>
+      <button id="toggle-raw" class="ctl-btn" aria-pressed="false">raw JSON</button>
+      <span id="conn" class="conn conn--wait" title="stream connection">● connecting</span>
+    </div>
+  </header>
+
+  <main>
+    <section id="empty" class="empty" hidden>no agent sessions detected yet</section>
+    <section id="board" class="board" aria-live="polite"></section>
+
+    <pre id="raw" class="raw" hidden></pre>
+  </main>
+
+  <footer id="sysfooter" class="sysfooter">
+    <div class="sys-warming" id="warming" hidden>⚠ warming — CPU%% has no baseline yet</div>
+    <div class="sys-grid">
+      <div class="sys-block"><span class="sys-label">CPU</span><div id="sys-cpu" class="meter"></div><span id="sys-cpu-val" class="sys-val">—</span></div>
+      <div class="sys-block"><span class="sys-label">MEM</span><div id="sys-mem" class="meter meter--seg"></div><span id="sys-mem-val" class="sys-val">—</span></div>
+      <div class="sys-block"><span class="sys-label">NET</span><span id="sys-net-val" class="sys-val">—</span></div>
+      <div class="sys-block sys-stamp"><span id="sys-time" class="sys-val">—</span></div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
