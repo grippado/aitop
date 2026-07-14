@@ -100,6 +100,7 @@ the TUI lacks. Concretely, everything the browser does beyond the TUI is one of:
 | Web-only affordance | Terminal analog it enriches |
 |---|---|
 | tool/sort **dropdowns** | the TUI's `f` (filter) / `o` (sort) keybinds |
+| **list/grid toggle** | the TUI's `v` — list gives each card the full width (action in full); grid packs columns |
 | **copy-command chip** on a fillable `—` | (none — a link/button is the point) |
 | per-session **sparklines** | (none — scrollback the TUI can't hold) |
 | **raw-JSON** inspector | `aitop --once --json` in a second pane |

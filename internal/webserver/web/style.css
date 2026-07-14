@@ -96,10 +96,16 @@ main { flex: 1; padding: 16px; }
 
 .board {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 14px;
   align-content: start;
+  align-items: start; /* cards size to content, no stretched empty space */
 }
+/* GRID: as many columns as fit, each stretched to fill the row (auto-fit,
+   not auto-fill — so N cards spread across the width instead of leaving
+   trailing gaps). LIST: one full-width card per row. Toggled like the TUI's
+   'v', and kept in lockstep with it (RFC 0004 parity principle). */
+.board--grid { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+.board--list { grid-template-columns: 1fr; }
 
 .card {
   --tool: var(--tool-unknown);
@@ -109,11 +115,26 @@ main { flex: 1; padding: 16px; }
   border-radius: var(--radius);
   padding: 12px 14px;
   display: flex;
-  flex-direction: column;
   gap: 8px;
   min-width: 0;
 }
-.card--child { margin-left: 18px; border-left-style: dashed; }
+.card-main, .card-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+/* GRID: main over side, one narrow column. */
+.board--grid .card { flex-direction: column; }
+
+/* LIST: main (what) fills the width, side (how much) is a fixed rail on the
+   right — so the last action gets the whole page width and reads in full. */
+.board--list .card { flex-direction: row; align-items: stretch; gap: 20px; }
+.board--list .card-main { flex: 1; }
+.board--list .card-side {
+  width: 320px; flex-shrink: 0;
+  border-left: 1px dashed var(--border); padding-left: 18px;
+  justify-content: center;
+}
+
+.card--child { border-left-style: dashed; }
+.board--list .card--child { margin-left: 26px; }
 
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .card-title { font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -132,16 +153,25 @@ main { flex: 1; padding: 16px; }
 .pill {
   display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px;
   background: var(--bg-elev); color: var(--text); border: 1px solid var(--border);
+  white-space: nowrap;
 }
 .pill .model { color: var(--tool); }
-.card-meta { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
-.cwd { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cwd { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; }
 
 .action {
   color: var(--text); font-size: 12px;
   background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px;
-  padding: 6px 8px; min-height: 30px;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  padding: 6px 10px; min-height: 30px;
+}
+/* GRID: clamp to keep card heights even. LIST: show the whole action — the
+   full-width rail is exactly the room a terminal card never had. */
+.board--grid .action {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.board--list .action {
+  flex: 1; white-space: pre-wrap; word-break: break-word;
+  display: flex; align-items: center;
 }
 .action--empty { color: var(--muted); }
 

@@ -22,6 +22,7 @@ const el = {
   conn: document.getElementById('conn'),
   filterTool: document.getElementById('filter-tool'),
   sortCol: document.getElementById('sort-col'),
+  toggleLayout: document.getElementById('toggle-layout'),
   toggleRaw: document.getElementById('toggle-raw'),
   warming: document.getElementById('warming'),
   sysCpu: document.getElementById('sys-cpu'),
@@ -34,6 +35,10 @@ const el = {
 
 let lastSnapshot = null;
 let showRaw = false;
+// Layout mirrors the TUI's list/grid toggle ('v'). GRID packs cards into as
+// many columns as fit (stretched to fill the row); LIST gives each card the
+// full page width so the last action shows in full. Persisted per browser.
+let layout = localStorage.getItem('aitop.layout') === 'list' ? 'list' : 'grid';
 
 // ---- helpers mirroring the Go UI ---------------------------------------
 
@@ -256,11 +261,19 @@ async function copyCmd(text, btn) {
 
 // ---- render -------------------------------------------------------------
 
+// A card is split into two zones so the CSS can re-flow them per layout:
+//   .card-main — title, badges, tool/cwd, last action (the "what")
+//   .card-side — context, tokens, usage, suggestion (the "how much")
+// In GRID they stack (one narrow column); in LIST they sit side by side so the
+// last action gets the full page width and shows in full. Same DOM either way.
 function renderCard(c, onBoardPids) {
   const card = el2('div', 'card');
   card.style.setProperty('--tool', `var(--tool-${toolClass(c.tool)})`);
   const nested = c.parentPid && onBoardPids.has(c.parentPid);
   if (nested) card.classList.add('card--child');
+
+  const main = el2('div', 'card-main');
+  const side = el2('div', 'card-side');
 
   // header: title + lineage
   const head = el2('div', 'card-head');
@@ -269,17 +282,13 @@ function renderCard(c, onBoardPids) {
   head.appendChild(title);
   const lineage = lineageText(c);
   if (lineage) head.appendChild(el2('span', 'lineage', lineage));
-  card.appendChild(head);
+  main.appendChild(head);
 
-  // badges: state
-  const badges = el2('div', 'badges');
-  const [badgeText, badgeCls] = stateBadge(c.status);
-  badges.appendChild(el2('span', `badge ${badgeCls}`, badgeText));
-  if (c.kind) badges.appendChild(el2('span', 'badge badge--kind', `[${c.kind}]`));
-  card.appendChild(badges);
-
-  // pill: tool (model) + cwd
+  // pill row: state badges + tool(model) pill + cwd
   const meta = el2('div', 'card-meta');
+  const [badgeText, badgeCls] = stateBadge(c.status);
+  meta.appendChild(el2('span', `badge ${badgeCls}`, badgeText));
+  if (c.kind) meta.appendChild(el2('span', 'badge badge--kind', `[${c.kind}]`));
   const pill = el2('span', 'pill');
   pill.appendChild(document.createTextNode(friendlyTool(c.tool)));
   if (c.model) {
@@ -288,25 +297,22 @@ function renderCard(c, onBoardPids) {
   }
   meta.appendChild(pill);
   meta.appendChild(c.cwd ? el2('span', 'cwd', c.cwd) : dashSpan());
-  card.appendChild(meta);
+  main.appendChild(meta);
 
-  // last action
+  // last action — the session's own last tool call / message
   const action = el2('div', 'action');
   if (c.lastAction) { action.textContent = c.lastAction; }
   else { action.classList.add('action--empty'); action.textContent = DASH; }
-  card.appendChild(action);
+  main.appendChild(action);
 
-  // context metric
-  card.appendChild(contextMetric(c));
-  // tokens metric
-  card.appendChild(tokensMetric(c));
+  // right zone: context, tokens, usage, suggestion
+  side.appendChild(contextMetric(c));
+  side.appendChild(tokensMetric(c));
 
-  // usage line
   const usage = el2('div', 'usage');
   usage.textContent = usageText(c);
-  card.appendChild(usage);
+  side.appendChild(usage);
 
-  // agentic suggestion (copy-only)
   const sug = suggestionFor(c);
   if (sug) {
     const wrap = el2('div', 'suggest');
@@ -315,8 +321,11 @@ function renderCard(c, onBoardPids) {
     btn.title = 'Copy this command, then run it in Claude Code (aitop never runs it for you)';
     btn.addEventListener('click', () => copyCmd(sug.cmd, btn));
     wrap.appendChild(btn);
-    card.appendChild(wrap);
+    side.appendChild(wrap);
   }
+
+  card.appendChild(main);
+  card.appendChild(side);
   return card;
 }
 
@@ -418,6 +427,8 @@ function render() {
 
   const onBoardPids = new Set(cards.filter(c => c.pid).map(c => c.pid));
 
+  el.board.classList.toggle('board--list', layout === 'list');
+  el.board.classList.toggle('board--grid', layout === 'grid');
   el.board.replaceChildren();
   if (cards.length === 0) {
     el.empty.hidden = false;
@@ -480,8 +491,20 @@ function fmtBps(bps) {
 
 // ---- wiring -------------------------------------------------------------
 
+function applyLayoutButton() {
+  el.toggleLayout.textContent = layout === 'list' ? '▤ list' : '▦ grid';
+  el.toggleLayout.setAttribute('aria-pressed', String(layout === 'list'));
+}
+applyLayoutButton();
+
 el.filterTool.addEventListener('change', render);
 el.sortCol.addEventListener('change', render);
+el.toggleLayout.addEventListener('click', () => {
+  layout = layout === 'grid' ? 'list' : 'grid';
+  localStorage.setItem('aitop.layout', layout);
+  applyLayoutButton();
+  render();
+});
 el.toggleRaw.addEventListener('click', () => {
   showRaw = !showRaw;
   el.toggleRaw.setAttribute('aria-pressed', String(showRaw));
