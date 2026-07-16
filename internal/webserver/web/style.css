@@ -1,0 +1,247 @@
+/* aitop browser view — self-contained, no external fonts or assets.
+   Palette mirrors the TUI's BtopClassic theme (internal/ui/theme/theme.go):
+   per-tool identity colors, btop green/yellow/red gauge gradient, green IN /
+   red OUT token arrows. Missing data is rendered as "—" (dash) by app.js,
+   never a fabricated 0 — same honesty rule as the terminal. */
+
+:root {
+  --bg: #0b0d10;
+  --bg-card: #14171c;
+  --bg-elev: #1b1f26;
+  --border: #2a2f38;
+  --text: #e6e9ef;
+  --muted: #8a8a8a;
+  --accent: #34d0d0; /* ansi 6-ish cyan */
+
+  --good: #37d367; /* green */
+  --warn: #e6c93c; /* yellow */
+  --bad: #e5484d;  /* red */
+
+  --tok-in: #37d367;
+  --tok-out: #e5484d;
+
+  /* per-tool identity (ANSI 256 → hex) */
+  --tool-claude: #ff875f;       /* 209 coral */
+  --tool-codex: #00af87;        /* 36 teal */
+  --tool-cursor: #af87ff;       /* 141 light purple */
+  --tool-cursor-agent: #ff87ff; /* 213 pink */
+  --tool-opencode: #ffd700;     /* 220 gold */
+  --tool-unknown: #8a8a8a;      /* 245 muted */
+
+  --radius: 10px;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ---- top bar ---- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #101318, var(--bg));
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-wrap: wrap;
+}
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.logo { font-weight: 700; font-size: 18px; letter-spacing: 0.5px; color: var(--text); }
+.tagline { color: var(--muted); font-size: 12px; }
+
+.controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ctl {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--muted); font-size: 12px;
+}
+.ctl select, .ctl-btn {
+  background: var(--bg-elev);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ctl-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+.conn { font-size: 12px; }
+.conn--ok { color: var(--good); }
+.conn--wait { color: var(--warn); }
+.conn--down { color: var(--bad); }
+
+/* ---- board ---- */
+main { flex: 1; padding: 16px; }
+.empty { color: var(--muted); padding: 40px; text-align: center; }
+
+.board {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  align-items: start; /* cards size to content, no stretched empty space */
+}
+/* GRID: as many columns as fit, each stretched to fill the row (auto-fit,
+   not auto-fill — so N cards spread across the width instead of leaving
+   trailing gaps). LIST: one full-width card per row. Toggled like the TUI's
+   'v', and kept in lockstep with it (RFC 0004 parity principle). */
+.board--grid { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+.board--list { grid-template-columns: 1fr; }
+
+.card {
+  --tool: var(--tool-unknown);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--tool);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.card-main, .card-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+/* GRID: main over side, one narrow column. */
+.board--grid .card { flex-direction: column; }
+
+/* LIST: main (what) fills the width, side (how much) is a fixed rail on the
+   right — so the last action gets the whole page width and reads in full. */
+.board--list .card { flex-direction: row; align-items: stretch; gap: 20px; }
+.board--list .card-main { flex: 1; }
+.board--list .card-side {
+  width: 320px; flex-shrink: 0;
+  border-left: 1px dashed var(--border); padding-left: 18px;
+  justify-content: center;
+}
+
+.card--child { border-left-style: dashed; }
+.board--list .card--child { margin-left: 26px; }
+
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.card-title { font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-title--fallback { font-weight: 400; color: var(--muted); }
+.lineage { color: var(--muted); font-size: 11px; white-space: nowrap; flex-shrink: 0; }
+
+.badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.badge {
+  font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--muted);
+}
+.badge--running { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+.badge--idle, .badge--unknown { color: var(--muted); }
+.badge--kind { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+
+.pill {
+  display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px;
+  background: var(--bg-elev); color: var(--text); border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.pill .model { color: var(--tool); }
+.card-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cwd { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; }
+
+.action {
+  color: var(--text); font-size: 12px;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 10px; min-height: 30px;
+}
+/* GRID: clamp to keep card heights even. LIST: show the whole action — the
+   full-width rail is exactly the room a terminal card never had. */
+.board--grid .action {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.board--list .action {
+  flex: 1; white-space: pre-wrap; word-break: break-word;
+  display: flex; align-items: center;
+}
+.action--empty { color: var(--muted); }
+
+.metric { display: flex; align-items: center; gap: 8px; }
+.metric-label { color: var(--muted); font-size: 11px; width: 58px; flex-shrink: 0; }
+.metric-body { flex: 1; min-width: 0; }
+.metric-val { font-size: 12px; white-space: nowrap; }
+.metric-spark { flex-shrink: 0; }
+
+.meter {
+  position: relative; height: 8px; border-radius: 4px;
+  background: var(--bg-elev); border: 1px solid var(--border); overflow: hidden;
+}
+.meter > .fill { position: absolute; inset: 0 auto 0 0; height: 100%; border-radius: 3px; }
+.meter--seg > .fill--ai { background: var(--accent); }
+.meter--seg > .fill--sys { background: var(--muted); opacity: 0.5; }
+
+.tok { display: flex; gap: 14px; font-size: 12px; }
+.tok .in { color: var(--tok-in); }
+.tok .out { color: var(--tok-out); }
+
+.usage { color: var(--muted); font-size: 11px; border-top: 1px dashed var(--border); padding-top: 6px; }
+
+.suggest {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: 11px; color: var(--muted);
+}
+.suggest button {
+  font-family: inherit; font-size: 11px;
+  background: transparent; color: var(--accent);
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 6px; padding: 2px 8px; cursor: pointer;
+}
+.suggest button:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.suggest button.copied { color: var(--good); border-color: var(--good); }
+
+.dash { color: var(--muted); }
+
+/* ---- raw json ---- */
+.raw {
+  margin: 8px 0 0; padding: 14px;
+  background: #0d0f13; border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-size: 12px; max-height: 60vh; overflow: auto; white-space: pre;
+}
+
+/* ---- footer ---- */
+.sysfooter {
+  border-top: 1px solid var(--border);
+  background: #0d0f13;
+  padding: 8px 16px;
+  position: sticky; bottom: 0;
+}
+.sys-warming { color: var(--warn); font-size: 11px; margin-bottom: 4px; }
+.sys-grid { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.sys-block { display: flex; align-items: center; gap: 8px; }
+.sys-label { color: var(--muted); font-size: 11px; }
+.sys-val { font-size: 12px; }
+.sys-stamp { margin-left: auto; color: var(--muted); }
+.sysfooter .meter { width: 160px; }
+
+@media (max-width: 560px) {
+  .board { grid-template-columns: 1fr; }
+  .sysfooter .meter { width: 100px; }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f7f9; --bg-card: #ffffff; --bg-elev: #eef0f3; --border: #d7dbe0;
+    --text: #1b1f26; --muted: #6b7280;
+  }
+  .topbar { background: linear-gradient(180deg, #ffffff, var(--bg)); }
+  .raw, .sysfooter { background: #ffffff; }
+}

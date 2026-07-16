@@ -31,9 +31,26 @@ Homebrew tap (`brew install grippado/aitop/aitop`) is planned but not live yet �
 aitop                    # live TUI, 2s refresh
 aitop --once             # one text snapshot, then exit
 aitop --once --json      # machine-readable snapshot
+aitop --serve            # read-only browser dashboard at http://127.0.0.1:8787
+aitop --serve --addr :9000   # bind a different host:port (localhost by default)
 aitop --refresh 5s       # override the tick interval
 aitop --demo             # synthetic agent cards, no real tool required
 ```
+
+### Browser view — `aitop serve`
+
+`aitop serve` renders the **same** board in a browser: one card per session,
+same fields, same btop palette, same `—`-for-missing honesty as the TUI — it's a
+read-only consumer of the very same `Snapshot`, not a second data path. It only
+*adds* what a terminal can't do well: a list/grid layout toggle (list gives each
+card the full width so the last action reads in full — grid packs columns, like
+the TUI's `v`), tool/sort dropdowns, per-session context/token sparklines, a
+raw-JSON inspector, and a copy-to-clipboard chip that
+hands you the right `/aitop-enhance` command when a card shows a fillable `—`
+(you run it in Claude Code — aitop never executes anything; it stays read-only).
+It serves over stdlib `net/http` with the SPA embedded in the binary (no CDN, no
+build step), binds `127.0.0.1` by default, and the TUI and web view are kept in
+lockstep by design — see [RFC 0004](./docs/rfcs/0004-aitop-web-view.md).
 
 ### Keybindings
 
